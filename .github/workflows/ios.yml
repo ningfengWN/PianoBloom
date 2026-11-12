@@ -1,0 +1,44 @@
+name: iOS build and core checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test real pitch and practice logic
+        run: bash scripts/test-core.sh
+      - name: Build iPhone and iPad simulator app
+        run: >-
+          xcodebuild -project PianoBloom.xcodeproj -scheme PianoBloom
+          -configuration Debug -sdk iphonesimulator
+          -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+      - name: Build unsigned iOS device app
+        run: >-
+          xcodebuild -project PianoBloom.xcodeproj -scheme PianoBloom
+          -configuration Release -sdk iphoneos
+          -destination 'generic/platform=iOS'
+          -derivedDataPath build-device CODE_SIGNING_ALLOWED=NO build
+      - name: Capture simulator screen
+        run: |
+          DEVICE_ID=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x["udid"] for group in d["devices"].values() for x in group if "iPhone" in x["name"]))')
+          xcrun simctl boot "$DEVICE_ID" || true
+          xcrun simctl bootstatus "$DEVICE_ID" -b
+          xcrun simctl install "$DEVICE_ID" build/Build/Products/Debug-iphonesimulator/PianoBloom.app
+          xcrun simctl launch "$DEVICE_ID" com.pianobloom.app
+          sleep 3
+          xcrun simctl io "$DEVICE_ID" screenshot build/PianoBloom-iPhone.png
+      - name: Save simulator app and preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: PianoBloom-simulator
+          path: |
+            build/Build/Products/Debug-iphonesimulator/PianoBloom.app
+            build/PianoBloom-iPhone.png
