@@ -70,6 +70,7 @@ struct Performance {
     private(set) var epoch: Double?
     private(set) var pauseTime: Double?
     private(set) var mistakes = 0
+    private(set) var mistakePositions = Set<Int>()
     private(set) var finished = false
     private var pending: Set<Int> = []
     private var pendingTime: Double?
@@ -130,6 +131,7 @@ struct Performance {
         if pendingTime == nil { pendingTime = time }
         pending.formUnion(notes)
         if !pending.isSubset(of: target) {
+            mistakePositions.insert(position)
             if time - lastAttempt > 0.14 { mistakes += 1; lastAttempt = time }
             pending = []; pendingTime = nil
             return .wrong
@@ -169,5 +171,58 @@ struct MIDIByteParser {
             }
         }
         return events
+    }
+}
+
+// A serializable learning path. Unlocks depend on completed attempts, never elapsed app time.
+enum GuidedStage: String, Codable, CaseIterable {
+    case right, left, both, flow, concert, finished
+    var title: String {
+        switch self {
+        case .right: return "右手小段"
+        case .left: return "左手小段"
+        case .both: return "双手合练"
+        case .flow: return "节奏挑战"
+        case .concert: return "小小演奏家"
+        case .finished: return "整曲完成"
+        }
+    }
+    var hands: PracticeHands { self == .right ? .right : self == .left ? .left : .both }
+    var style: PlayStyle { self == .flow || self == .concert ? .rhythm : .follow }
+    var instruction: String {
+        switch self {
+        case .right: return "先听一遍，再用右手弹亮起来的音符。"
+        case .left: return "轮到左手啦，右手休息一下。"
+        case .both: return "两只手一起试试。音符分达到 70 分，或完整练习 3 遍，进入节奏挑战。"
+        case .flow: return "跟着固定拍子弹，音符和节奏都达到 90 分，或完整练习 3 遍，进入演奏。"
+        case .concert: return "连贯演奏这一段。音符和节奏都达到 90 分，或完整练习 3 遍，再练下一段。"
+        case .finished: return "每个小乐段，都开出一朵花！"
+        }
+    }
+}
+struct GuidedJourney: Codable, Equatable {
+    var phrase = 0
+    var stage: GuidedStage = .right
+    var attempts = 0
+    var wholeSong = false
+    var complete: Bool { stage == .finished }
+    mutating func record(pitch: Int, rhythm: Int?, phraseCount: Int) {
+        guard !complete else { return }
+        attempts += 1
+        switch stage {
+        case .right: stage = .left; attempts = 0
+        case .left: stage = .both; attempts = 0
+        case .both:
+            if pitch >= 70 || attempts >= 3 { stage = .flow; attempts = 0 }
+        case .flow:
+            if (pitch >= 90 && (rhythm ?? 0) >= 90) || attempts >= 3 { stage = .concert; attempts = 0 }
+        case .concert:
+            guard (pitch >= 90 && (rhythm ?? 0) >= 90) || attempts >= 3 else { return }
+            attempts = 0
+            if wholeSong { stage = .finished }
+            else if phrase + 1 < max(1, phraseCount) { phrase += 1; stage = .right }
+            else { wholeSong = true }
+        case .finished: break
+        }
     }
 }

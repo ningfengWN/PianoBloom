@@ -3,7 +3,7 @@ import SwiftUI
 struct GrandStaffView: View {
     @ObservedObject var model: PracticeModel
     let wide: Bool
-    private var perLine: Int { model.score.isHanon && wide ? 16 : 8 }
+    private var perLine: Int { wide ? (model.score.isHanon && model.notationScale < 1.5 ? 16 : 8) : 4 }
     private var lineCount: Int { (model.performance.score.events.count + perLine - 1) / perLine }
     var body: some View {
         ScrollViewReader { proxy in
@@ -11,14 +11,14 @@ struct GrandStaffView: View {
                 LazyVStack(spacing: 12) {
                     ForEach(0..<lineCount, id: \.self) { row in
                         StaffSystem(score: model.performance.score, start: row * perLine, count: perLine,
-                                    performance: model.performance, hands: model.hands, wrong: model.lastGrade == .wrong, beat: model.beat, running: model.running)
-                            .frame(height: wide ? 236 : 230)
+                                    performance: model.performance, position: model.visualPosition, notationScale: model.notationScale, hands: model.hands, wrong: model.lastGrade == .wrong && !model.demonstrating, beat: model.visualBeat, running: model.running || model.demonstrating)
+                            .frame(height: 236 * model.notationScale)
                             .id(row)
                             .accessibilityLabel("第 \(row + 1) 行双手琴谱")
                     }
                 }.padding(.horizontal, wide ? 28 : 8).padding(.vertical, 12)
             }
-            .onChange(of: model.performance.position / perLine) { row in
+            .onChange(of: model.visualPosition / perLine) { row in
                 withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(min(lineCount - 1, row), anchor: .top) }
             }
             .onChange(of: model.performance.epoch) { _ in
@@ -33,15 +33,20 @@ private struct StaffSystem: View {
     let start: Int
     let count: Int
     let performance: Performance
+    let position: Int
+    let notationScale: Double
     let hands: PracticeHands
     let wrong: Bool
     let beat: Double
     let running: Bool
-    private let ink = Color(red: 0.30, green: 0.23, blue: 0.33)
+    private let ink = Color(red: 0.15, green: 0.11, blue: 0.17)
     private let pink = Color(red: 0.88, green: 0.31, blue: 0.53)
     private var end: Int { min(start + count, score.events.count) }
     var body: some View {
-        Canvas { context, size in
+        Canvas { context, canvasSize in
+            let scale = CGFloat(notationScale)
+            context.scaleBy(x: scale, y: scale)
+            let size = CGSize(width: canvasSize.width / scale, height: canvasSize.height / scale)
             let left: CGFloat = 78, right: CGFloat = size.width - 16
             let topBottom: CGFloat = 88, lowBottom: CGFloat = 188, gap: CGFloat = 10
             let firstBeat = score.events[start].beat
@@ -71,20 +76,29 @@ private struct StaffSystem: View {
             func text(_ string: String, _ point: CGPoint, _ font: Font, _ color: Color, anchor: UnitPoint = .center) {
                 context.draw(Text(string).font(font).foregroundColor(color), at: point, anchor: anchor)
             }
+            let weakIndices = performance.mistakePositions.union(performance.judgments.filter { $0.value.grade != .perfect }.map(\.key))
+            let weakBars = Set(weakIndices.filter { $0 < score.events.count }.map { Int(score.events[$0].beat) / score.beatsPerBar })
+            for bar in weakBars {
+                let from = max(firstBeat, Double(bar * score.beatsPerBar))
+                let to = min(endBeat, Double((bar + 1) * score.beatsPerBar))
+                if to > from {
+                    context.stroke(Path(roundedRect: CGRect(x: x(from) - 12, y: 30, width: max(20, x(to) - x(from)), height: 194), cornerRadius: 8), with: .color(pink.opacity(0.6)), lineWidth: 1.3)
+                }
+            }
             // The cursor covers both staves so children can locate both hands at once.
-            if performance.position >= start && performance.position < end {
-                let currentX = x(score.events[performance.position].beat)
+            if position >= start && position < end {
+                let currentX = x(score.events[position].beat)
                 context.fill(Path(roundedRect: CGRect(x: currentX - 13, y: 8, width: 26, height: 216), cornerRadius: 12), with: .color(pink.opacity(0.10)))
             }
             for (lower, bottom) in [(false, topBottom), (true, lowBottom)] {
                 let enabled = lower ? hands != .right : hands != .left
-                let opacity = enabled ? 1.0 : 0.25
+                let opacity = enabled ? 1.0 : 0.60
                 var staff = Path()
                 for line in 0..<5 {
                     staff.move(to: CGPoint(x: 28, y: bottom - CGFloat(line) * gap))
                     staff.addLine(to: CGPoint(x: right, y: bottom - CGFloat(line) * gap))
                 }
-                context.stroke(staff, with: .color(ink.opacity(0.28 * opacity)), lineWidth: 0.8)
+                context.stroke(staff, with: .color(ink.opacity(0.70 * opacity)), lineWidth: 1.15)
                 text(lower && !lowTreble ? "𝄢" : "𝄞", CGPoint(x: 40, y: bottom - 20), .system(size: lower && !lowTreble ? 32 : 46), ink.opacity(opacity))
                 text(lower ? "左手" : "右手", CGPoint(x: 4, y: bottom - 20), .system(size: 9, weight: .medium), pink.opacity(opacity), anchor: .leading)
                 if start == 0 {
@@ -101,18 +115,19 @@ private struct StaffSystem: View {
                     let notes = lower ? event.left : event.right
                     let centerX = x(event.beat)
                     let judgment = performance.judgments[index]
-                    let current = index == performance.position
+                    let current = index == position
                     let color: Color
                     switch judgment?.grade {
                     case .perfect?: color = Color(red: 0.19, green: 0.64, blue: 0.50)
-                    case .early?, .late?: color = Color(red: 0.69, green: 0.48, blue: 0.81)
-                    case .missed?, .wrong?: color = .orange
-                    case nil: color = current ? (wrong ? .orange : pink) : ink
+                    case .early?, .late?: color = Color(red: 0.19, green: 0.64, blue: 0.50)
+                    case .missed?: color = .gray
+                    case .wrong?: color = .red
+                    case nil: color = current ? (wrong ? .red : pink) : ink
                     }
                     let paint = color.opacity(opacity)
                     if Int((event.beat * 100).rounded()) % (score.beatsPerBar * 100) == 0 {
                         var bar = Path(); bar.move(to: CGPoint(x: centerX - 12, y: bottom - 40)); bar.addLine(to: CGPoint(x: centerX - 12, y: bottom))
-                        context.stroke(bar, with: .color(ink.opacity(0.25)), lineWidth: 0.8)
+                        context.stroke(bar, with: .color(ink.opacity(0.25)), lineWidth: 1.1)
                         if !lower {
                             text("\(Int(event.beat) / score.beatsPerBar + 1)", CGPoint(x: centerX - 12, y: 5), .system(size: 9), .secondary)
                         }
@@ -131,18 +146,23 @@ private struct StaffSystem: View {
                             for line in stride(from: first, through: centerY, by: step) {
                                 ledger.move(to: CGPoint(x: centerX - 9, y: line)); ledger.addLine(to: CGPoint(x: centerX + 9, y: line))
                             }
-                            context.stroke(ledger, with: .color(paint), lineWidth: 0.8)
+                            context.stroke(ledger, with: .color(paint), lineWidth: 1.1)
                         }
                         let head = Path(ellipseIn: CGRect(x: centerX - 5.5, y: centerY - 3.6, width: 11, height: 7.2))
                         if event.duration >= 2 { context.stroke(head, with: .color(paint), lineWidth: 1.8) }
                         else { context.fill(head, with: .color(paint)) }
+                        if judgment?.grade == .early || judgment?.grade == .late {
+                            let offset: CGFloat = judgment?.grade == .early ? -8 : 8
+                            let shadow = Path(ellipseIn: CGRect(x: centerX - 5.5 + offset, y: centerY - 3.6, width: 11, height: 7.2))
+                            context.stroke(shadow, with: .color(.red.opacity(0.7)), lineWidth: 1.3)
+                        }
                     }
                     // Beams are grouped by beat (never across barlines); half and quarter notes retain their stems.
                     let stem = stemGeometry(index, lower: lower)
                     let stemY = stem.head, up = stem.up, stemX = stem.x, stemEnd = stem.end
                     if event.duration < 4 {
                         var stem = Path(); stem.move(to: CGPoint(x: stemX, y: stemY)); stem.addLine(to: CGPoint(x: stemX, y: stemEnd))
-                        context.stroke(stem, with: .color(paint), lineWidth: 1.2)
+                        context.stroke(stem, with: .color(paint), lineWidth: 1.6)
                     }
                     if event.duration <= 0.5 {
                         let nextIndex = index + 1

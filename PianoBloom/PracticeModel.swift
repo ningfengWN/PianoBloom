@@ -35,6 +35,28 @@ final class PracticeModel: ObservableObject {
     @Published private(set) var results: [PracticeResult] = []
     @Published private(set) var latestResult: PracticeResult?
     @Published var showResult = false
+    @Published private(set) var guided = false
+    @Published private(set) var journey = GuidedJourney()
+    @Published private(set) var completedJourney: GuidedJourney?
+    @Published private(set) var demonstrating = false
+    @Published private(set) var demoPosition = 0
+    @Published private(set) var demoBeat = 0.0
+    @Published var notationScale: Double { didSet { defaults.set(notationScale, forKey: "notationScale") } }
+    @Published var voiceHints: Bool { didSet { defaults.set(voiceHints, forKey: "voiceHints") } }
+    private let demonstrator = PianoDemonstrator()
+    private var demoTimer: Timer?
+    private var demoScore: PianoScore?
+    private var lastVoiceTime = -Double.infinity
+    var visualPosition: Int { demonstrating ? demoPosition : performance.position }
+    var visualBeat: Double { demonstrating ? demoBeat : beat }
+    var phraseCount: Int { max(1, Int(ceil(score.length / Double(score.beatsPerBar * 2)))) }
+    var guidedTitle: String { journey.wholeSong ? "整曲演奏" : journey.stage.title }
+    var guidedRange: String { journey.wholeSong ? "完整曲谱" : "第 \(journey.phrase * 2 + 1)–\(min(journey.phrase * 2 + 2, Int(ceil(score.length / Double(score.beatsPerBar))))) 小节" }
+    var weakBars: [Int] {
+        let positions = performance.mistakePositions.union(performance.judgments.filter { $0.value.grade != .perfect }.map(\.key))
+        return Array(Set(positions.filter { $0 < performance.score.events.count }.map { Int(performance.score.events[$0].beat) / score.beatsPerBar })).sorted()
+    }
+
     @Published var sensitivity: Double { didSet { defaults.set(sensitivity, forKey: "sensitivity") } }
     @Published var latencyMS: Double { didSet { defaults.set(latencyMS, forKey: "latencyMS") } }
     let microphone = Microphone()
@@ -65,6 +87,9 @@ final class PracticeModel: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        let savedScale = defaults.double(forKey: "notationScale")
+        notationScale = savedScale == 0 ? 1.35 : min(1.7, max(1, savedScale))
+        voiceHints = defaults.object(forKey: "voiceHints") == nil ? true : defaults.bool(forKey: "voiceHints")
         let stored = defaults.double(forKey: "centralC")
         reference = (245...280).contains(stored) ? stored : Music.standardC
         calibrated = (245...280).contains(stored)
@@ -88,10 +113,11 @@ final class PracticeModel: ObservableObject {
         performance.pause(at: ProcessInfo.processInfo.systemUptime)
     }
     #endif
-    deinit { timer?.invalidate(); calibrationTimer?.invalidate() }
-    func select(_ score: PianoScore) { pause(); self.score = score; sectionBar = nil; restart() }
+    deinit { timer?.invalidate(); calibrationTimer?.invalidate(); demoTimer?.invalidate() }
+    func select(_ score: PianoScore) { pause(); guided = false; self.score = score; sectionBar = nil; restart() }
     func configure(hands: PracticeHands? = nil, style: PlayStyle? = nil, input: PianoInput? = nil, bpm: Double? = nil) {
         pause()
+        guided = false
         if let hands { self.hands = hands }
         if let style { self.style = style }
         if let input { self.input = input }
@@ -105,8 +131,61 @@ final class PracticeModel: ObservableObject {
         elapsed = 0; recordingResult = false; latestResult = nil; showResult = false; lastGrade = nil
         feedback = style == .follow ? "跟着发光的音符，慢慢弹就好。" : "先数一小节，再跟着星星的节拍弹。"
     }
+    func beginGuided() {
+        pause(); guided = true
+        if let data = defaults.data(forKey: "journey-" + score.id), let saved = try? JSONDecoder().decode(GuidedJourney.self, from: data), !saved.complete, saved.phrase < phraseCount { journey = saved }
+        else { journey = GuidedJourney() }
+        applyJourney()
+    }
+    func beginFree() { pause(); guided = false }
+    private func applyJourney() {
+        hands = journey.stage.hands; style = journey.stage.style
+        sectionBar = journey.wholeSong ? nil : journey.phrase * 2
+        restart(); feedback = journey.stage.instruction
+    }
+    func continueGuided() { guard guided, !journey.complete else { return }; applyJourney() }
+    func repeatGuided() {
+        guard let completedJourney else { restart(); return }
+        journey = completedJourney; saveJourney(); applyJourney()
+    }
+    private func saveJourney() {
+        if let data = try? JSONEncoder().encode(journey) { defaults.set(data, forKey: "journey-" + score.id) }
+    }
+    func replayWeakBar(_ localBar: Int) {
+        let global = (sectionBar ?? 0) + localBar
+        guided = false; selectSection(global)
+    }
+    func speakInstruction() {
+        pause(); demonstrator.speak(guided ? journey.stage.instruction : "先听示范，再弹亮起来的音符。")
+    }
+    func demonstrate() {
+        pause()
+        // Always audition a bounded excerpt. Whole-score audition starts at the current two-bar group.
+        let globalBar = sectionBar ?? (Int(performance.score.events[min(performance.position, performance.score.events.count - 1)].beat) / score.beatsPerBar / 2 * 2)
+        let excerpt = score.excerpt(globalBar)
+        guard !excerpt.events.isEmpty else { return }
+        do {
+            try demonstrator.play(score: excerpt, hands: hands, bpm: bpm)
+            demoScore = excerpt; demonstrating = true
+            let start = ProcessInfo.processInfo.systemUptime
+            let offset = Double(globalBar - (sectionBar ?? 0)) * Double(score.beatsPerBar)
+            demoBeat = offset; demoPosition = performance.score.events.firstIndex(where: { $0.beat >= offset }) ?? 0
+            feedback = "正在听音符示范，键盘会同步亮起。"
+            demoTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
+                guard let self else { return }
+                let beat = (ProcessInfo.processInfo.systemUptime - start) * self.bpm / 60
+                self.demoBeat = offset + beat
+                if beat >= excerpt.length { self.pause(); self.feedback = "示范结束，轮到你来试试。"; return }
+                let index = excerpt.events.lastIndex(where: { $0.beat <= beat }) ?? 0
+                self.demoPosition = self.performance.score.events.firstIndex(where: { $0.beat >= offset + excerpt.events[index].beat }) ?? 0
+                self.heard = excerpt.events[index].pitches(self.hands)
+            }
+        } catch { feedback = "示范声音暂不可用，请检查设备声音设置。" }
+    }
     func toggle() {
+        if demonstrating { pause(); return }
         if running || microphone.requesting { pause(); return }
+        demonstrator.stop()
         if performance.finished { restart() }
         gate.reset(); polyGate.reset(); lastFrameTime = nil
         if input == .midi {
@@ -136,6 +215,7 @@ final class PracticeModel: ObservableObject {
         else if beat >= 0, feedback == "预备，一起数拍子。" { feedback = style == .follow ? "请弹亮起来的音符。" : "跟着节拍，让星星亮起来。" }
     }
     func pause() {
+        demonstrating = false; demoTimer?.invalidate(); demoTimer = nil; demoScore = nil; demonstrator.stop()
         now = ProcessInfo.processInfo.systemUptime
         performance.pause(at: now)
         if let startedAt { elapsed += max(0, now - startedAt) }
@@ -209,6 +289,12 @@ final class PracticeModel: ObservableObject {
         case .wrong: feedback = hands == .both ? "看看两只手，再试试发光的音符。" : "再看看发光的音符，小兔等你。"
         case .missed: break
         }
+        if grade == .wrong && style == .follow && voiceHints && time - lastVoiceTime > 3 {
+            lastVoiceTime = time
+            let notes = target.sorted().map(Music.name).joined(separator: "、")
+            pause(); feedback = "请再试试 \(notes)，点击开始继续。"
+            demonstrator.speak("再试试亮起来的音符。")
+        }
         if performance.finished { finish() }
     }
     private func finish() {
@@ -219,6 +305,11 @@ final class PracticeModel: ObservableObject {
                                     mistakes: performance.mistakes, accuracy: performance.pitchScore, seconds: seconds,
                                     rhythm: performance.rhythmScore, missed: performance.missedCount, hands: hands.rawValue,
                                     source: input == .microphone ? "麦克风估算" : "MIDI")
+        if guided {
+            completedJourney = journey
+            journey.record(pitch: result.accuracy, rhythm: result.rhythm, phraseCount: phraseCount)
+            saveJourney()
+        }
         latestResult = result; results.insert(result, at: 0); results = Array(results.prefix(30))
         if let data = try? JSONEncoder().encode(results) { defaults.set(data, forKey: "results") }
         pause(); showResult = true
