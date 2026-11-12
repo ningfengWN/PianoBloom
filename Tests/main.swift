@@ -13,9 +13,14 @@ for rate in [14700.0,16000.0,12000.0] {
     for midi in [48,55,60,61,64,69,72,83] {
         for detune in [0.0, 17.0] {
             let f = Music.frequency(midi) * pow(2, detune / 1200)
-            let pcm = (0..<2048).map { i -> Float in
-                let phase = 2 * Double.pi * f * Double(i) / rate
-                return Float(0.18 * sin(phase) + 0.10 * sin(2 * phase) + 0.05 * sin(3 * phase) + 0.03)
+            var pcm: [Float] = []
+            let step: Double = 2.0 * Double.pi * f / rate
+            for i in 0..<2048 {
+                let phase: Double = step * Double(i)
+                let fundamental: Double = 0.18 * sin(phase)
+                let harmonic2: Double = 0.10 * sin(2.0 * phase)
+                let harmonic3: Double = 0.05 * sin(3.0 * phase)
+                pcm.append(Float(fundamental + harmonic2 + harmonic3 + 0.03))
             }
             let result = PitchDetector.analyze(pcm, sampleRate: rate, time: 0)
             check(result.frequency != nil, "detect \(midi) at \(rate)")
