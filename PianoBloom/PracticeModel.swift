@@ -109,6 +109,7 @@ final class PracticeModel: ObservableObject {
     #if DEBUG
     func prepareScreenshot() {
         select(HanonScores.all[0])
+        if ProcessInfo.processInfo.arguments.contains("--preview-guided") { beginGuided(); return }
         performance.start(at: ProcessInfo.processInfo.systemUptime)
         performance.pause(at: ProcessInfo.processInfo.systemUptime)
     }
@@ -142,6 +143,7 @@ final class PracticeModel: ObservableObject {
         hands = journey.stage.hands; style = journey.stage.style
         sectionBar = journey.wholeSong ? nil : journey.phrase * 2
         restart(); feedback = journey.stage.instruction
+        if voiceHints { demonstrator.speak(journey.stage.instruction) }
     }
     func continueGuided() { guard guided, !journey.complete else { return }; applyJourney() }
     func repeatGuided() {

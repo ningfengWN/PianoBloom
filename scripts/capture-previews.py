@@ -16,7 +16,7 @@ for family in ('iPad', 'iPhone'):
     run('xcrun','simctl','ui',uid,'appearance','light')
     run('xcrun','simctl','status_bar',uid,'override','--time','09:41','--batteryState','charged','--batteryLevel','100')
     run('xcrun','simctl','install',uid,'build/Build/Products/Debug-iphonesimulator/PianoBloom.app')
-    for name, args in [('home', []), ('performance-portrait', ['--preview-performance'])] + ([('performance-landscape',['--preview-performance','--preview-landscape'])] if family == 'iPad' else []):
+    for name, args in [('home', []), ('performance-portrait', ['--preview-performance']), ('guided', ['--preview-performance','--preview-guided'])] + ([('performance-landscape',['--preview-performance','--preview-landscape'])] if family == 'iPad' else []):
         run('xcrun','simctl','terminate',uid,'com.pianobloom.app',check=False)
         run('xcrun','simctl','launch',uid,'com.pianobloom.app',*args)
         time.sleep(4)

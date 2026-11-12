@@ -130,18 +130,21 @@ struct GardenHome: View {
             }
         }.padding(22).frame(maxWidth: .infinity, alignment: .leading).background(.white, in: RoundedRectangle(cornerRadius: 26))
     }
+    private var filteredScores: [PianoScore] {
+        PianoScore.all.filter { searchText.isEmpty ? $0.isHanon == hanon : $0.title.localizedCaseInsensitiveContains(searchText) }
+    }
     private var library: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text("挑一首喜欢的曲子").font(.title3.bold()).foregroundStyle(Bloom.ink)
                 Spacer()
-                Text(hanon ? "20 首" : "3 首").font(.caption.bold()).foregroundStyle(Bloom.pink)
+                Text("\(filteredScores.count) 首").font(.caption.bold()).foregroundStyle(Bloom.pink)
             }
             TextField("搜索曲名，如：小星星、哈农", text: $searchText)
                 .textFieldStyle(.roundedBorder).accessibilityLabel("搜索曲谱")
             Picker("曲库", selection: $hanon) { Text("星星启蒙").tag(false); Text("哈农花园").tag(true) }.pickerStyle(.segmented)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 210), spacing: 14)], spacing: 14) {
-                ForEach(PianoScore.all.filter { $0.isHanon == hanon && (searchText.isEmpty || $0.title.localizedCaseInsensitiveContains(searchText)) }) { score in
+                ForEach(filteredScores) { score in
                     ScoreTile(score: score, selected: score.id == model.score.id) { model.select(score) }
                 }
             }
@@ -233,7 +236,7 @@ struct PerformanceScreen: View {
                 ZStack {
                     GrandStaffView(model: model, wide: wide)
                     if let count = model.countIn { countIn(count) }
-                    if !model.running && !model.demonstrating && !model.microphone.requesting && model.performance.epoch == nil { readyOverlay }
+                    if !model.running && !model.demonstrating && !model.microphone.requesting && model.performance.epoch == nil { readyOverlay(compact: short) }
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(.white, in: RoundedRectangle(cornerRadius: 26))
                     .overlay(RoundedRectangle(cornerRadius: 26).stroke(Bloom.pink.opacity(0.08), lineWidth: 1))
@@ -266,13 +269,20 @@ struct PerformanceScreen: View {
         .onDisappear { model.pause(); UIApplication.shared.isIdleTimerDisabled = false }
     }
     private var guidedStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(Array(GuidedStage.allCases.dropLast().enumerated()), id: \.offset) { index, stage in
-                    Text("\(index + 1) \(stage.title)").font(.caption.bold()).padding(.horizontal, 12).padding(.vertical, 8)
-                        .foregroundStyle(model.journey.stage == stage ? .white : Bloom.lilac)
-                        .background(model.journey.stage == stage ? Bloom.pink : .white, in: Capsule())
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(Array(GuidedStage.allCases.dropLast().enumerated()), id: \.offset) { index, stage in
+                        Text("\(index + 1) \(stage.title)").font(.caption.bold()).padding(.horizontal, 12).padding(.vertical, 8)
+                            .foregroundStyle(model.journey.stage == stage ? .white : Bloom.lilac)
+                            .background(model.journey.stage == stage ? Bloom.pink : .white, in: Capsule())
+                            .id(stage.rawValue)
+                    }
                 }
+            }
+            .onAppear { proxy.scrollTo(model.journey.stage.rawValue, anchor: .center) }
+            .onChange(of: model.journey.stage) { stage in
+                withAnimation { proxy.scrollTo(stage.rawValue, anchor: .center) }
             }
         }
     }
@@ -325,18 +335,20 @@ struct PerformanceScreen: View {
             }
         }.padding(.horizontal, 16).frame(minHeight: 44).background(.white.opacity(0.7), in: Capsule())
     }
-    private var readyOverlay: some View {
-        VStack(spacing: 14) {
+    private func readyOverlay(compact: Bool) -> some View {
+        VStack(spacing: compact ? 8 : 14) {
             Text(model.guided ? model.guidedTitle : "准备好，让音符开花了吗？").font(.headline).foregroundStyle(Bloom.ink)
-            Text(model.guided ? model.journey.stage.instruction : "先数 \(model.score.beatsPerBar) 拍，再开始弹奏")
-                .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            if !compact {
+                Text(model.guided ? model.journey.stage.instruction : "先数 \(model.score.beatsPerBar) 拍，再开始弹奏")
+                    .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            }
             HStack(spacing: 20) {
                 Button { model.demonstrate() } label: { Label("先听示范", systemImage: "play.rectangle") }
                 if model.voiceHints { Button { model.speakInstruction() } label: { Label("听听怎么练", systemImage: "speaker.wave.2") } }
             }.font(.subheadline.bold())
             Button { model.toggle() } label: { Label("开始演奏", systemImage: "play.fill").font(.headline).padding(8) }
                 .buttonStyle(.borderedProminent).clipShape(Capsule())
-        }.padding(26).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 26)).padding(14)
+        }.padding(compact ? 12 : 26).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 26)).padding(14)
     }
     private func countIn(_ count: Int) -> some View {
         VStack(spacing: 4) {
