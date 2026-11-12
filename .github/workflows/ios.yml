@@ -27,6 +27,8 @@ jobs:
           -destination 'generic/platform=iOS'
           -derivedDataPath build-device CODE_SIGNING_ALLOWED=NO build
       - name: Capture simulator screen
+        timeout-minutes: 3
+        continue-on-error: true
         run: |
           DEVICE_ID=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x["udid"] for group in d["devices"].values() for x in group if "iPhone" in x["name"]))')
           xcrun simctl boot "$DEVICE_ID" || true
@@ -36,6 +38,7 @@ jobs:
           sleep 3
           xcrun simctl io "$DEVICE_ID" screenshot build/PianoBloom-iPhone.png
       - name: Save simulator app and preview
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: PianoBloom-simulator

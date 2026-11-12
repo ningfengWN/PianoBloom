@@ -23,38 +23,7 @@ struct PracticeView: View {
     @State private var showHelp = false
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    if horizontalSizeClass == .regular { heading }
-                    Picker("练习方式", selection: Binding(get: { model.mode }, set: { model.changeMode($0) })) {
-                        ForEach(PracticeModel.Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                    }.pickerStyle(.segmented)
-                    MicrophoneCard(model: model, microphone: model.microphone)
-                    if model.mode == .practice {
-                        exercisePicker
-                        ScoreCard(model: model)
-                        feedback
-                    } else {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("让每一个声音，都有名字").font(.title3.bold())
-                            Text("一次弹一个琴键，音名和键盘会跟随琴声亮起。这里可以自由探索，不计对错。")
-                                .font(.subheadline).foregroundStyle(.secondary)
-                        }.padding(20).frame(maxWidth: .infinity, alignment: .leading).background(.white, in: RoundedRectangle(cornerRadius: 24))
-                    }
-                    if model.mode == .practice {
-                        DisclosureGroup("键盘示意") {
-                            KeyboardView(detected: model.detected, expected: model.expected)
-                        }.font(.subheadline)
-                    } else {
-                        KeyboardView(detected: model.detected, expected: nil)
-                    }
-                    HStack(spacing: 6) {
-                        Image(systemName: "lock.shield")
-                        Text("音频只在设备处理，不录音、不上传")
-                    }.font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity)
-                    Text("单音练习版 · 请关闭踏板，保持环境安静").font(.caption2).foregroundStyle(.secondary).frame(maxWidth: .infinity)
-                }.padding(.horizontal, 20).padding(.vertical, 16).frame(maxWidth: 960).frame(maxWidth: .infinity)
-            }
+            practiceContent
             .background(Palette.cream)
             .navigationTitle("琴芽").navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -82,6 +51,43 @@ struct PracticeView: View {
             .onChange(of: showHistory) { if $0 { model.pause() } }
             .onChange(of: showHelp) { if $0 { model.pause() } }
         }.tint(Palette.green)
+    }
+    private var practiceContent: some View {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    if horizontalSizeClass == .regular { heading }
+                    Picker("练习方式", selection: Binding(get: { model.mode }, set: { model.changeMode($0) })) {
+                        ForEach(PracticeModel.Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    }.pickerStyle(.segmented)
+                    MicrophoneCard(model: model, microphone: model.microphone)
+                    if model.mode == .practice {
+                        exercisePicker
+                        ScoreCard(model: model)
+                        feedback
+                    } else {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("让每一个声音，都有名字").font(.title3.bold())
+                            Text("一次弹一个琴键，音名和键盘会跟随琴声亮起。这里可以自由探索，不计对错。")
+                                .font(.subheadline).foregroundStyle(.secondary)
+                        }.padding(20).frame(maxWidth: .infinity, alignment: .leading).background(.white, in: RoundedRectangle(cornerRadius: 24))
+                    }
+                    keyboardSection
+                    HStack(spacing: 6) {
+                        Image(systemName: "lock.shield")
+                        Text("音频只在设备处理，不录音、不上传")
+                    }.font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity)
+                    Text("单音练习版 · 请关闭踏板，保持环境安静").font(.caption2).foregroundStyle(.secondary).frame(maxWidth: .infinity)
+                }.padding(.horizontal, 20).padding(.vertical, 16).frame(maxWidth: 960).frame(maxWidth: .infinity)
+            }
+    }
+    @ViewBuilder private var keyboardSection: some View {
+        if model.mode == .practice {
+            DisclosureGroup("键盘示意") {
+                KeyboardView(detected: model.detected, expected: model.expected)
+            }.font(.subheadline)
+        } else {
+            KeyboardView(detected: model.detected, expected: nil)
+        }
     }
     private var heading: some View {
         HStack(alignment: .top) {
