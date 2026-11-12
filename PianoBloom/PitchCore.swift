@@ -119,7 +119,7 @@ struct CentralCCalibrator {
     private var since: Double?
     mutating func reset() { self = CentralCCalibrator() }
     mutating func process(_ frame: PitchFrame, threshold: Double) -> Double? {
-        guard let f = frame.frequency, (245...280).contains(f), frame.rms >= threshold else {
+        guard let f = frame.frequency, (250...274).contains(f), frame.rms >= threshold else {
             reset(); return nil
         }
         if let first = frequencies.first, abs(1200 * log2(f / first)) > 18 { reset() }

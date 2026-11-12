@@ -57,6 +57,10 @@ for i in 0..<10 { reference = calibrator.process(PitchFrame(frequency: 263, rms:
 check(reference == 263, "stable central C calibration")
 calibrator.reset()
 for i in 0..<10 { check(calibrator.process(frame(72,Double(i)*0.08), threshold:0.004) == nil, "wrong octave cannot calibrate") }
+for midi in [59,61] {
+    calibrator.reset()
+    for i in 0..<10 { check(calibrator.process(frame(midi,Double(i)*0.08), threshold:0.004) == nil, "adjacent key cannot calibrate") }
+}
 var progress = PracticeProgress(notes: [60,60,62])
 check(!progress.accept(64), "wrong note rejected")
 check(progress.position == 0 && progress.mistakes == 1, "wrong note doesn't advance")
