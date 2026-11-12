@@ -17,6 +17,7 @@ private enum Palette {
 struct PracticeView: View {
     @ObservedObject var model: PracticeModel
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var showSettings = false
     @State private var showHistory = false
     @State private var showHelp = false
@@ -24,7 +25,7 @@ struct PracticeView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    heading
+                    if horizontalSizeClass == .regular { heading }
                     Picker("练习方式", selection: Binding(get: { model.mode }, set: { model.changeMode($0) })) {
                         ForEach(PracticeModel.Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                     }.pickerStyle(.segmented)
@@ -40,8 +41,13 @@ struct PracticeView: View {
                                 .font(.subheadline).foregroundStyle(.secondary)
                         }.padding(20).frame(maxWidth: .infinity, alignment: .leading).background(.white, in: RoundedRectangle(cornerRadius: 24))
                     }
-                    KeyboardView(detected: model.detected, expected: model.mode == .practice ? model.expected : nil)
-                    ControlsView(model: model, microphone: model.microphone)
+                    if model.mode == .practice {
+                        DisclosureGroup("键盘示意") {
+                            KeyboardView(detected: model.detected, expected: model.expected)
+                        }.font(.subheadline)
+                    } else {
+                        KeyboardView(detected: model.detected, expected: nil)
+                    }
                     HStack(spacing: 6) {
                         Image(systemName: "lock.shield")
                         Text("音频只在设备处理，不录音、不上传")
@@ -57,6 +63,12 @@ struct PracticeView: View {
                     Button { showHistory = true } label: { Image(systemName: "clock.arrow.circlepath") }.accessibilityLabel("练习记录")
                     Button { showSettings = true } label: { Image(systemName: "slider.horizontal.3") }.accessibilityLabel("设置")
                 }
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                ControlsView(model: model, microphone: model.microphone)
+                    .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 8)
+                    .frame(maxWidth: 960).frame(maxWidth: .infinity)
+                    .background(Palette.cream)
             }
             .sheet(isPresented: $showSettings) { SettingsView(model: model) }
             .sheet(isPresented: $showHistory) { HistoryView(model: model) }
@@ -121,9 +133,9 @@ private struct MicrophoneCard: View {
             }.foregroundStyle(.white.opacity(0.8))
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(model.detected.map(Music.name) ?? "—")
-                    .font(.system(size: 62, weight: .semibold, design: .rounded)).monospacedDigit()
+                    .font(.system(size: 48, weight: .semibold, design: .rounded)).monospacedDigit()
                 Text(model.detected.map(Music.solfege) ?? "等待琴声").font(.title3).foregroundStyle(.white.opacity(0.7))
-            }.foregroundStyle(.white).frame(minHeight: 78)
+            }.foregroundStyle(.white).frame(minHeight: 58)
             if let frequency = model.frequency {
                 Text(String(format: "%.1f Hz   ·   %@%.0f 音分", frequency, model.cents >= 0 ? "+" : "", model.cents))
                     .font(.caption.monospacedDigit()).foregroundStyle(.white.opacity(0.75))
