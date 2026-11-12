@@ -3,8 +3,17 @@ import Foundation
 enum PracticeHands: String, CaseIterable, Codable { case right = "右手", left = "左手", both = "双手" }
 enum PlayStyle: String, CaseIterable { case follow = "跟谱练习", rhythm = "节奏挑战" }
 enum PracticeMode: String, CaseIterable {
-    case reading = "识谱", rhythm = "节奏", performance = "演奏"
-    var style: PlayStyle { self == .reading ? .follow : .rhythm }
+    case reading = "识谱", rhythm = "节奏", performance = "演奏", flow = "心流"
+    var style: PlayStyle { self == .reading || self == .performance ? .follow : .rhythm }
+    var waitsForCorrect: Bool { self == .performance }
+    var instruction: String {
+        switch self {
+        case .reading: return "跟着音符练习，错音记下后继续。"
+        case .rhythm: return "跟着固定节拍弹，留意起音时间。"
+        case .performance: return "弹错时停在当前音符，弹对后自动继续。"
+        case .flow: return "跟着节拍连续弹，错音、漏音和节奏问题结束后一起看。"
+        }
+    }
 }
 
 struct ScoreEvent: Equatable {
@@ -90,6 +99,7 @@ struct Performance {
     let hands: PracticeHands
     let style: PlayStyle
     let bpm: Double
+    let waitForCorrect: Bool
     private(set) var judgments: [Int: EventJudgment] = [:]
     private(set) var position = 0
     private(set) var epoch: Double?
@@ -108,9 +118,14 @@ struct Performance {
     }
     var correctCount: Int { judgments.values.filter { $0.grade != .wrong && $0.grade != .missed }.count }
     var missedCount: Int { judgments.values.filter { $0.grade == .missed }.count }
+    var earlyCount: Int { judgments.values.filter { $0.grade == .early }.count }
+    var lateCount: Int { judgments.values.filter { $0.grade == .late }.count }
     var pitchScore: Int {
-        let denominator = finished ? score.events.count : judgments.count
-        return Int((100 * Double(correctCount) / Double(max(1, denominator))).rounded())
+        let pendingMistakes = waitForCorrect ? mistakePositions.filter { judgments[$0] == nil }.count : 0
+        let denominator = finished ? score.events.count : judgments.count + pendingMistakes
+        let correctedMistakes = mistakePositions.filter { judgments[$0] != nil }.count
+        let firstTryCorrect = waitForCorrect ? max(0, correctCount - correctedMistakes) : correctCount
+        return Int((100 * Double(firstTryCorrect) / Double(max(1, denominator))).rounded())
     }
     var rhythmScore: Int? {
         guard style == .rhythm, !judgments.isEmpty else { return nil }
@@ -121,8 +136,9 @@ struct Performance {
         let denominator = finished ? score.events.count : judgments.count
         return Int((100 * sum / Double(max(1, denominator))).rounded())
     }
-    init(score: PianoScore, hands: PracticeHands, style: PlayStyle, bpm: Double) {
+    init(score: PianoScore, hands: PracticeHands, style: PlayStyle, bpm: Double, waitForCorrect: Bool = false) {
         self.score = score; self.hands = hands; self.style = style; self.bpm = min(160, max(20, bpm))
+        self.waitForCorrect = waitForCorrect && style == .follow
     }
     mutating func start(at time: Double) {
         if let pauseTime, let epoch { self.epoch = epoch + time - pauseTime; self.pauseTime = nil }
@@ -158,10 +174,12 @@ struct Performance {
         if !pending.isSubset(of: target) {
             mistakePositions.insert(position)
             mistakes += 1
-            judgments[position] = EventJudgment(grade: .wrong, error: style == .rhythm ? error : nil, heard: pending)
+            let heard = pending
             pending = []; pendingTime = nil
-            // The other note-on packets from this same mistaken chord must not consume the next event.
+            // Other packets from the same chord are ignored in both modes.
             suppressUntil = time + max(0, min(groupingWindow, window))
+            if waitForCorrect { return .wrong }
+            judgments[position] = EventJudgment(grade: .wrong, error: style == .rhythm ? error : nil, heard: heard)
             position += 1
             if style == .follow { finished = position == score.events.count }
             return .wrong
@@ -218,14 +236,14 @@ enum GuidedStage: String, Codable, CaseIterable {
         }
     }
     var hands: PracticeHands { self == .right ? .right : self == .left ? .left : .both }
-    var style: PlayStyle { self == .flow || self == .concert ? .rhythm : .follow }
+    var style: PlayStyle { self == .flow ? .rhythm : .follow }
     var instruction: String {
         switch self {
         case .right: return "先听一遍，再用右手弹亮起来的音符。"
         case .left: return "轮到左手啦，右手休息一下。"
         case .both: return "两只手一起试试。音符分达到 70 分，或完整练习 3 遍，进入节奏挑战。"
         case .flow: return "跟着固定拍子弹，音符和节奏都达到 90 分，或完整练习 3 遍，进入演奏。"
-        case .concert: return "连贯演奏这一段。音符和节奏都达到 90 分，或完整练习 3 遍，再练下一段。"
+        case .concert: return "弹错会停在当前音符，看看提示，弹对后继续。"
         case .finished: return "每个小乐段，都开出一朵花！"
         }
     }
@@ -251,7 +269,7 @@ struct GuidedJourney: Codable, Equatable {
         case .flow:
             if (pitch >= 90 && (rhythm ?? 0) >= 90) || attempts >= 3 { stage = .concert; attempts = 0 }
         case .concert:
-            guard (pitch >= 90 && (rhythm ?? 0) >= 90) || attempts >= 3 else { return }
+            guard pitch >= 90 || attempts >= 3 else { return }
             attempts = 0
             if wholeSong { stage = .finished }
             else if phrase + 1 < max(1, phraseCount) { phrase += 1; stage = .right }

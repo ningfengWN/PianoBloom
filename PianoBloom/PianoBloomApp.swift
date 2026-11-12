@@ -236,6 +236,15 @@ struct PerformanceScreen: View {
                     ZStack {
                         GrandStaffView(model: model, wide: wide)
                         if let count = model.countIn { countIn(count) }
+                        if model.practiceMode == .performance && model.lastGrade == .wrong {
+                            VStack {
+                                Label(model.feedback, systemImage: "music.note")
+                                    .font(.subheadline.bold()).foregroundStyle(Bloom.pink)
+                                    .padding(12).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+                                    .padding(.horizontal, 16)
+                                Spacer()
+                            }.allowsHitTesting(false)
+                        }
                     }.frame(maxWidth: .infinity, maxHeight: .infinity)
                 }.background(.white)
                 if showKeyboard || model.demonstrating {
@@ -282,8 +291,8 @@ struct PerformanceScreen: View {
             if wide {
                 Picker("选择练法", selection: Binding(get: { model.practiceMode }, set: { model.selectPracticeMode($0) })) {
                     ForEach(PracticeMode.allCases, id: \.self) { mode in Text(mode.rawValue).tag(mode) }
-                }.pickerStyle(.segmented).frame(width: 220)
-                    .accessibilityHint("识谱、节奏、演奏均可直接选择，无需解锁")
+                }.pickerStyle(.segmented).frame(width: 260)
+                    .accessibilityHint("识谱、节奏、演奏、心流均可直接选择，无需解锁")
                 Spacer(minLength: 0)
                 HStack(spacing: 5) {
                     ForEach(0..<model.score.beatsPerBar, id: \.self) { index in
@@ -336,7 +345,9 @@ struct PerformanceScreen: View {
             Toggle("小兔语音提示", isOn: $model.voiceHints)
             Button("听听怎么练") { model.speakInstruction() }
             Button("音符颜色说明") { showScoreSettings = false; showReview = true }
-            Text("小花标记表示已弹过：绿色为正确，粉红色为错音；灰色表示漏弹。错音自动记下并继续，不会暂停收音。")
+            Text(model.practiceMode.instruction)
+                .font(.subheadline.bold()).foregroundStyle(Bloom.pink)
+            Text("小花标记表示已弹过：绿色为正确，粉红色为错音；灰色表示漏弹。演奏模式等弹对，心流模式不中断。")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -476,9 +487,11 @@ private struct ResultGarden: View {
                             score("音符", value: result.accuracy)
                             if let rhythm = result.rhythm { score("节奏", value: rhythm) }
                         }.padding(24).background(.white, in: RoundedRectangle(cornerRadius: 28))
-                        Text("点亮 \(result.count) 组音符 · 漏弹 \(result.missed ?? 0) 组 · \(result.seconds) 秒").font(.subheadline).foregroundStyle(.secondary)
+                        Text("\(result.mode ?? "练习") · 点亮 \(result.count) 组音符 · \(result.seconds) 秒").font(.subheadline).foregroundStyle(.secondary)
+                        Text("错音 \(result.mistakes) 次 · 漏音 \(result.missed ?? 0) 组 · 抢拍 \(result.early ?? 0) 组 · 拖拍 \(result.late ?? 0) 组")
+                            .font(.subheadline).foregroundStyle(Bloom.ink).multilineTextAlignment(.center)
                         if result.source == "麦克风估算" { Text("麦克风估算结果；双手八度与踏板可能影响准确性。") .font(.caption).foregroundStyle(Bloom.lilac) }
-                        Text(result.rhythm == nil ? "这次是自由跟谱练习，没有节奏评分。" : "节奏分按固定速度下的起音时间计算；漏弹记 0 分。")
+                        Text(result.rhythm == nil ? "这次按音符跟谱；演奏模式弹对后继续，不计算固定节拍分。" : "节奏分按固定速度下的起音时间计算；漏弹记 0 分。")
                             .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
                     }
                     if model.guided {

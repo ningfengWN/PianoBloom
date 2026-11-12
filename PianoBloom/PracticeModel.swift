@@ -12,6 +12,9 @@ struct PracticeResult: Codable, Identifiable {
     var missed: Int?
     var hands: String?
     var source: String?
+    var early: Int?
+    var late: Int?
+    var mode: String?
 }
 
 enum PianoInput: String, CaseIterable { case microphone = "麦克风", midi = "USB MIDI" }
@@ -161,7 +164,7 @@ final class PracticeModel: ObservableObject {
         pause(); guided = false; completedJourney = nil
         practiceMode = selection; style = selection.style
         restart()
-        feedback = "已选择\(selection.rawValue)，可随时切换练法和左右手。"
+        feedback = selection.instruction
         if resume { toggle() }
         else if replayDemo { demonstrate() }
     }
@@ -172,9 +175,9 @@ final class PracticeModel: ObservableObject {
     func selectSection(_ bar: Int?) { sectionBar = bar; restart() }
     func restart() {
         pause()
-        performance = Performance(score: currentScore, hands: hands, style: style, bpm: bpm)
+        performance = Performance(score: currentScore, hands: hands, style: style, bpm: bpm, waitForCorrect: practiceMode.waitsForCorrect)
         elapsed = 0; recordingResult = false; latestResult = nil; showResult = false; lastGrade = nil
-        feedback = style == .follow ? "跟着发光的音符，慢慢弹就好。" : "先数一小节，再跟着星星的节拍弹。"
+        feedback = practiceMode.instruction
     }
     func beginGuided() {
         pause(); guided = true
@@ -185,7 +188,7 @@ final class PracticeModel: ObservableObject {
     func beginFree() { pause(); guided = false }
     private func applyJourney() {
         hands = journey.stage.hands; style = journey.stage.style
-        practiceMode = journey.stage == .concert ? .performance : (style == .follow ? .reading : .rhythm)
+        practiceMode = journey.stage == .concert ? .performance : (journey.stage == .flow ? .flow : .reading)
         sectionBar = journey.wholeSong ? nil : journey.phrase * 2
         restart(); feedback = journey.stage.instruction
         if voiceHints { demonstrator.speak(journey.stage.instruction) }
@@ -333,9 +336,14 @@ final class PracticeModel: ObservableObject {
         case .perfect: feedback = "真棒！又点亮一颗小星星。"
         case .early: feedback = "音弹对啦，再等一点点节拍。"
         case .late: feedback = "音弹对啦，下次早一点点。"
-        case .wrong: feedback = "这一音已记下，继续弹下一个亮起的音符。"
+        case .wrong:
+            if practiceMode == .performance {
+                let expected = target.sorted().map { "\(Music.solfege($0))（\(Music.name($0))）" }.joined(separator: "、")
+                feedback = "再试一次：请弹 \(expected)，弹对后继续。"
+            } else { feedback = "这一音已记下，继续弹下一个亮起的音符。" }
         case .missed: break
         }
+        if practiceMode == .flow && grade != .perfect { feedback = "继续跟着节拍，结束后一起看需要练习的地方。" }
         if performance.finished { finish() }
     }
     private func finish() {
@@ -345,7 +353,8 @@ final class PracticeModel: ObservableObject {
         let result = PracticeResult(title: score.title + (sectionBar.map { " · 第 \($0 + 1) 小节起" } ?? ""), date: Date(), count: performance.correctCount,
                                     mistakes: performance.mistakes, accuracy: performance.pitchScore, seconds: seconds,
                                     rhythm: performance.rhythmScore, missed: performance.missedCount, hands: hands.rawValue,
-                                    source: input == .microphone ? "麦克风估算" : "MIDI")
+                                    source: input == .microphone ? "麦克风估算" : "MIDI",
+                                    early: performance.earlyCount, late: performance.lateCount, mode: practiceMode.rawValue)
         if guided {
             completedJourney = journey
             journey.record(pitch: result.accuracy, rhythm: result.rhythm, phraseCount: phraseCount)
