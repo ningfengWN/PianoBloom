@@ -347,7 +347,7 @@ struct PerformanceScreen: View {
             Button("音符颜色说明") { showScoreSettings = false; showReview = true }
             Text(model.practiceMode.instruction)
                 .font(.subheadline.bold()).foregroundStyle(Bloom.pink)
-            Text("小花标记表示已弹过：绿色为正确，粉红色为错音；灰色表示漏弹。演奏模式等弹对，心流模式不中断。")
+            Text("绿色：正确；红色：错音/漏音；心流中灰色：连续卡顿、连续错音较多或未演奏。红色重影表示抢拍/拖拍；粉色括号为不熟练区域。")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -490,6 +490,10 @@ private struct ResultGarden: View {
                         Text("\(result.mode ?? "练习") · 点亮 \(result.count) 组音符 · \(result.seconds) 秒").font(.subheadline).foregroundStyle(.secondary)
                         Text("错音 \(result.mistakes) 次 · 漏音 \(result.missed ?? 0) 组 · 抢拍 \(result.early ?? 0) 组 · 拖拍 \(result.late ?? 0) 组")
                             .font(.subheadline).foregroundStyle(Bloom.ink).multilineTextAlignment(.center)
+                        if let stalls = result.stallSections {
+                            Text("卡顿/未演奏片段 \(stalls) 处 · 连续错音较多 \(result.denseErrorSections ?? 0) 处")
+                                .font(.subheadline.bold()).foregroundStyle(Bloom.lilac).multilineTextAlignment(.center)
+                        }
                         if result.source == "麦克风估算" { Text("麦克风估算结果；双手八度与踏板可能影响准确性。") .font(.caption).foregroundStyle(Bloom.lilac) }
                         Text(result.rhythm == nil ? "这次按音符跟谱；演奏模式弹对后继续，不计算固定节拍分。" : "节奏分按固定速度下的起音时间计算；漏弹记 0 分。")
                             .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
@@ -558,7 +562,7 @@ private struct ParentSettings: View {
                     Text("曲谱与所有音频分析均在设备运行，不保存录音、不上传声音。")
                 }
                 Section("琴谱与署名") {
-                    Text("PianoBloom 2.4 · 整曲花朵琴谱")
+                    Text("PianoBloom 2.5 · 心流复盘")
                     Text("哈农 1–20：Steve Taylor / Javier Ruiz-Alma，Mutopia，CC BY-SA 4.0。保留双手、时值，展开原谱反复。启蒙双手曲为本 App 教学改编。")
                     Link("查看曲谱来源", destination: URL(string: "https://www.mutopiaproject.org/ftp/HanonCL/virtuoso-pianist-pt1/")!)
                 }
@@ -622,14 +626,14 @@ private struct PracticeLegend: View {
     var body: some View {
         NavigationStack {
             List {
-                Label("绿色音符和小花：弹对且已经弹过", systemImage: "music.note").foregroundStyle(Bloom.mint)
-                Label("红色音符和粉色小花：已记下错音，自动继续", systemImage: "music.note").foregroundStyle(.red)
-                Label("灰色音符：这一拍漏弹了", systemImage: "music.note").foregroundStyle(.gray)
+                Label("绿色音符：演奏正确", systemImage: "music.note").foregroundStyle(Bloom.mint)
+                Label("红色音符：错音 / 漏音", systemImage: "music.note").foregroundStyle(.red)
+                Label("灰色音符：错误太多 / 演奏卡顿 / 未演奏", systemImage: "music.note").foregroundStyle(.gray)
                 Label("红色影子在前：弹早了；在后：弹晚了", systemImage: "metronome").foregroundStyle(Bloom.lilac)
-                Label("粉色框：本次需要复习的小节", systemImage: "rectangle.dashed").foregroundStyle(Bloom.pink)
+                Label("粉色括号：不熟练区域，结束后可选小节重练", systemImage: "brackets").foregroundStyle(Bloom.pink)
                 Text("示范是本机生成的音符声音和同步键盘。阶段讲解和手动示范会暂停收音；弹奏中的错音只用画面提示，不再播放语音或要求点击开始。")
-                Text("带练流程：两小节右手 → 左手 → 双手 → 节奏挑战 → 演奏；完成全部小段后进入整曲演奏。")
-                Text("双手达到 70 分或完成 3 遍进入节奏挑战；挑战与演奏要求音符、节奏均达到 90 分，或完成 3 遍。麦克风成绩仍为估算。")
+                Text("识谱、节奏、演奏、心流都能直接选择；左手、右手、双手和练习范围也能独立切换。")
+                Text("演奏模式弹错会等待纠正；心流模式持续前进，结束后汇总问题。心流中的连续漏弹至少两组且持续一拍，标为卡顿/未演奏片段；连续三组错音标为错误较多。单独漏音仍为红色。")
             }.navigationTitle("小兔练琴说明").toolbar { ToolbarItem(placement: .confirmationAction) { Button("明白啦") { dismiss() } } }
         }
     }

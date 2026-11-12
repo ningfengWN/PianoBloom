@@ -15,6 +15,8 @@ struct PracticeResult: Codable, Identifiable {
     var early: Int?
     var late: Int?
     var mode: String?
+    var stallSections: Int?
+    var denseErrorSections: Int?
 }
 
 enum PianoInput: String, CaseIterable { case microphone = "麦克风", midi = "USB MIDI" }
@@ -52,6 +54,7 @@ final class PracticeModel: ObservableObject {
     private var demoScore: PianoScore?
     var visualPosition: Int { demonstrating ? demoPosition : performance.position }
     var visualBeat: Double { demonstrating ? demoBeat : beat }
+    var flowReview: FlowReview { FlowReview(score: performance.score, judgments: performance.judgments) }
     var displayMap: ScoreDisplayMap { ScoreDisplayMap(score: score, sectionBar: sectionBar) }
     var notationPosition: Int { displayMap.globalIndex(visualPosition) ?? score.events.count }
     var notationFocus: Int { displayMap.globalIndex(min(visualPosition, max(0, performance.score.events.count - 1))) ?? 0 }
@@ -260,7 +263,10 @@ final class PracticeModel: ObservableObject {
         guard running else { return }
         let before = performance.missedCount
         performance.tick(at: now - (input == .microphone ? 0.25 : 0.02))
-        if performance.missedCount > before { lastGrade = .missed; feedback = "这颗星星先放过，跟上下一拍吧。" }
+        if performance.missedCount > before {
+            lastGrade = .missed
+            feedback = practiceMode == .flow ? "保持音乐向前，结束后一起看需要练习的小节。" : "这颗星星先放过，跟上下一拍吧。"
+        }
         if performance.finished { finish() }
         else if beat >= 0, feedback == "预备，一起数拍子。" { feedback = style == .follow ? "请弹亮起来的音符。" : "跟着节拍，让星星亮起来。" }
     }
@@ -354,7 +360,9 @@ final class PracticeModel: ObservableObject {
                                     mistakes: performance.mistakes, accuracy: performance.pitchScore, seconds: seconds,
                                     rhythm: performance.rhythmScore, missed: performance.missedCount, hands: hands.rawValue,
                                     source: input == .microphone ? "麦克风估算" : "MIDI",
-                                    early: performance.earlyCount, late: performance.lateCount, mode: practiceMode.rawValue)
+                                    early: performance.earlyCount, late: performance.lateCount, mode: practiceMode.rawValue,
+                                    stallSections: practiceMode == .flow ? flowReview.stallSections : nil,
+                                    denseErrorSections: practiceMode == .flow ? flowReview.denseErrorSections : nil)
         if guided {
             completedJourney = journey
             journey.record(pitch: result.accuracy, rhythm: result.rhythm, phraseCount: phraseCount)

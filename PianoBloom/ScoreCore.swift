@@ -92,6 +92,35 @@ struct EventJudgment {
     let heard: Set<Int>
 }
 
+/// Review classifications are derived from judgments, never from UI frame rate.
+/// A silent run is only a hesitation candidate after >=2 attacks spanning >=1 beat.
+/// These flags change annotation colors, not the original pitch/rhythm grades.
+struct FlowReview {
+    let stalledPositions: Set<Int>
+    let denseErrorPositions: Set<Int>
+    let stallSections: Int
+    let denseErrorSections: Int
+    init(score: PianoScore, judgments: [Int: EventJudgment]) {
+        let silent = Self.runs(score: score, judgments: judgments, grade: .missed).filter { run in
+            run.count >= 2 && run.reduce(0.0) { $0 + score.events[$1].duration } >= 1
+        }
+        let wrong = Self.runs(score: score, judgments: judgments, grade: .wrong).filter { $0.count >= 3 }
+        stalledPositions = Set(silent.flatMap { $0 })
+        denseErrorPositions = Set(wrong.flatMap { $0 })
+        stallSections = silent.count; denseErrorSections = wrong.count
+    }
+    var grayPositions: Set<Int> { stalledPositions.union(denseErrorPositions) }
+    private static func runs(score: PianoScore, judgments: [Int: EventJudgment], grade: NoteGrade) -> [[Int]] {
+        var result: [[Int]] = [], current: [Int] = []
+        for index in score.events.indices {
+            if judgments[index]?.grade == grade { current.append(index) }
+            else if !current.isEmpty { result.append(current); current = [] }
+        }
+        if !current.isEmpty { result.append(current) }
+        return result
+    }
+}
+
 /// Uses an absolute beat grid: late notes never move the grid or improve future scores.
 /// Pause shifts its epoch; count-in and the final note's duration are part of the session.
 struct Performance {

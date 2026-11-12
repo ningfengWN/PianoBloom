@@ -14,7 +14,9 @@ struct GrandStaffView: View {
                         StaffSystem(score: model.score, start: row * perLine, count: perLine,
                                     judgments: model.displayMap.judgments(model.performance.judgments),
                                     mistakePositions: model.displayMap.positions(model.performance.mistakePositions),
-                                    style: model.style, position: model.notationPosition,
+                                    style: model.style, flowMode: model.practiceMode == .flow,
+                                    grayPositions: model.displayMap.positions(model.practiceMode == .flow ? model.flowReview.grayPositions : []),
+                                    position: model.notationPosition,
                                     notationScale: model.notationScale, hands: model.hands,
                                     beat: model.notationBeat, running: model.running || model.demonstrating,
                                     pops: pops.filter { $0.index / perLine == row },
@@ -100,6 +102,8 @@ private struct StaffSystem: View {
     let judgments: [Int: EventJudgment]
     let mistakePositions: Set<Int>
     let style: PlayStyle
+    let flowMode: Bool
+    let grayPositions: Set<Int>
     let position: Int
     let notationScale: Double
     let hands: PracticeHands
@@ -150,7 +154,16 @@ private struct StaffSystem: View {
                 let from = max(firstBeat, Double(bar * score.beatsPerBar))
                 let to = min(endBeat, Double((bar + 1) * score.beatsPerBar))
                 if to > from {
-                    context.stroke(Path(roundedRect: CGRect(x: x(from) - 12, y: 30, width: max(20, x(to) - x(from)), height: 194), cornerRadius: 8), with: .color(pink.opacity(0.6)), lineWidth: 1.3)
+                    let leftX = x(from) - 12, rightX = x(to)
+                    var brackets = Path()
+                    for (edge, inset) in [(leftX, CGFloat(7)), (rightX, CGFloat(-7))] {
+                        brackets.move(to: CGPoint(x: edge + inset, y: 30))
+                        brackets.addLine(to: CGPoint(x: edge, y: 30))
+                        brackets.addLine(to: CGPoint(x: edge, y: 224))
+                        brackets.addLine(to: CGPoint(x: edge + inset, y: 224))
+                    }
+                    context.fill(Path(CGRect(x: leftX, y: 30, width: max(0, rightX - leftX), height: 194)), with: .color(pink.opacity(0.025)))
+                    context.stroke(brackets, with: .color(pink.opacity(0.65)), lineWidth: 1.6)
                 }
             }
             // The cursor covers both staves so children can locate both hands at once.
@@ -189,11 +202,12 @@ private struct StaffSystem: View {
                     let current = index == position
                     let color: Color
                     switch judgment?.grade {
+                    case _ where enabled && flowMode && grayPositions.contains(index): color = .gray
                     case .perfect?: color = Color(red: 0.19, green: 0.64, blue: 0.50)
                     case .early?, .late?: color = Color(red: 0.19, green: 0.64, blue: 0.50)
-                    case .missed?: color = .gray
-                    case .wrong?: color = pink
-                    case nil: color = current && enabled ? pink : ink
+                    case .missed?: color = .red
+                    case .wrong?: color = .red
+                    case nil: color = current && enabled ? pink : (flowMode ? .gray : ink)
                     }
                     let paint = color.opacity(opacity)
                     if Int((event.beat * 100).rounded()) % (score.beatsPerBar * 100) == 0 {
@@ -225,7 +239,12 @@ private struct StaffSystem: View {
                         if judgment?.grade == .early || judgment?.grade == .late {
                             let offset: CGFloat = judgment?.grade == .early ? -8 : 8
                             let shadow = Path(ellipseIn: CGRect(x: centerX - 5.5 + offset, y: centerY - 3.6, width: 11, height: 7.2))
-                            context.stroke(shadow, with: .color(.red.opacity(0.7)), lineWidth: 1.3)
+                            context.fill(shadow, with: .color(.red.opacity(0.65)))
+                            let echoStem = stemGeometry(index, lower: lower)
+                            var echo = Path()
+                            echo.move(to: CGPoint(x: echoStem.x + offset, y: echoStem.head))
+                            echo.addLine(to: CGPoint(x: echoStem.x + offset, y: echoStem.end))
+                            context.stroke(echo, with: .color(.red.opacity(0.6)), lineWidth: 1.3)
                         }
                     }
                     if let judgment, judgment.grade != .missed {
@@ -233,7 +252,7 @@ private struct StaffSystem: View {
                         let flowerY = min(CGFloat(28), (noteYs.min() ?? 48) - 14)
                         // One blossom per onset column, shared by both staves.
                         if !lower || hands == .left || event.right.isEmpty {
-                            let blossom = judgment.grade == .wrong ? pink : Color(red: 0.19, green: 0.64, blue: 0.50)
+                            let blossom = flowMode && grayPositions.contains(index) ? .gray : (judgment.grade == .wrong ? Color.red : Color(red: 0.19, green: 0.64, blue: 0.50))
                             for petal in 0..<5 {
                                 let angle = Double(petal) * 2 * Double.pi / 5
                                 let petalX = centerX + CGFloat(cos(angle)) * 3.2
