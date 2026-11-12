@@ -143,7 +143,7 @@ struct GardenHome: View {
             TextField("搜索曲名，如：小星星、哈农", text: $searchText)
                 .textFieldStyle(.roundedBorder).accessibilityLabel("搜索曲谱")
             Picker("曲库", selection: $hanon) { Text("星星启蒙").tag(false); Text("哈农花园").tag(true) }.pickerStyle(.segmented)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 210), spacing: 14)], spacing: 14) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 250), spacing: 14)], spacing: 14) {
                 ForEach(filteredScores) { score in
                     ScoreTile(score: score, selected: score.id == model.score.id) { model.select(score) }
                 }
@@ -179,7 +179,7 @@ private struct ScoreTile: View {
                     else { Image(systemName: "music.note").foregroundStyle(Bloom.lilac.opacity(0.4)) }
                 }
                 Text(score.title).font(.system(size: 19, weight: .bold, design: .rounded)).foregroundStyle(Bloom.ink)
-                Text(score.detail).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.leading)
+                Text(score.detail).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
                 Label("\(score.beatsPerBar)/4 拍  ·  支持双手", systemImage: "hands.sparkles").font(.caption2.bold()).foregroundStyle(Bloom.lilac)
             }.padding(20).frame(maxWidth: .infinity, minHeight: 185, alignment: .leading)
                 .background(.white, in: RoundedRectangle(cornerRadius: 24))
