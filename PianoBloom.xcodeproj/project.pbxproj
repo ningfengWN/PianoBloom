@@ -2,13 +2,13 @@
 { archiveVersion = 1; classes = {}; objectVersion = 56; objects = {
 000000000000000000000001 = { isa = PBXProject; buildConfigurationList = 00000000000000000000000D; compatibilityVersion = "Xcode 14.0"; mainGroup = 000000000000000000000002; productRefGroup = 000000000000000000000004; targets = (000000000000000000000005); attributes = { LastUpgradeCheck = 1500; }; };
 000000000000000000000002 = { isa = PBXGroup; children = (000000000000000000000003, 000000000000000000000004); sourceTree = "<group>"; };
-000000000000000000000003 = { isa = PBXGroup; path = PianoBloom; children = (000000000000000000000007, 000000000000000000000008, 000000000000000000000064, 000000000000000000000065, 000000000000000000000066, 000000000000000000000067); sourceTree = "<group>"; };
+000000000000000000000003 = { isa = PBXGroup; path = PianoBloom; children = (000000000000000000000304, 000000000000000000000303, 000000000000000000000302, 000000000000000000000301, 000000000000000000000300, 000000000000000000000007, 000000000000000000000008, 000000000000000000000064, 000000000000000000000065, 000000000000000000000066, 000000000000000000000067); sourceTree = "<group>"; };
 000000000000000000000004 = { isa = PBXGroup; name = Products; children = (000000000000000000000006); sourceTree = "<group>"; };
 000000000000000000000007 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PianoBloomApp.swift; sourceTree = "<group>"; };
 000000000000000000000008 = { isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 000000000000000000000006 = { isa = PBXFileReference; explicitFileType = wrapper.application; path = PianoBloom.app; sourceTree = BUILT_PRODUCTS_DIR; };
 000000000000000000000009 = { isa = PBXBuildFile; fileRef = 000000000000000000000007; };
-00000000000000000000000A = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000009, 0000000000000000000000C8, 0000000000000000000000C9, 0000000000000000000000CA); runOnlyForDeploymentPostprocessing = 0; };
+00000000000000000000000A = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000404, 000000000000000000000403, 000000000000000000000402, 000000000000000000000401, 000000000000000000000400, 000000000000000000000009, 0000000000000000000000C8, 0000000000000000000000C9, 0000000000000000000000CA); runOnlyForDeploymentPostprocessing = 0; };
 00000000000000000000000B = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 00000000000000000000000C = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (0000000000000000000000CB); runOnlyForDeploymentPostprocessing = 0; };
 000000000000000000000005 = { isa = PBXNativeTarget; name = PianoBloom; productName = PianoBloom; productReference = 000000000000000000000006; productType = "com.apple.product-type.application"; buildConfigurationList = 00000000000000000000000E; buildPhases = (00000000000000000000000A,00000000000000000000000B,00000000000000000000000C); buildRules = (); dependencies = (); };
@@ -27,4 +27,14 @@
 0000000000000000000000CA = { isa = PBXBuildFile; fileRef = 000000000000000000000066; };
 000000000000000000000067 = { isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 0000000000000000000000CB = { isa = PBXBuildFile; fileRef = 000000000000000000000067; };
+000000000000000000000300 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoreCore.swift; sourceTree = "<group>"; };
+000000000000000000000400 = { isa = PBXBuildFile; fileRef = 000000000000000000000300; };
+000000000000000000000301 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HanonScores.swift; sourceTree = "<group>"; };
+000000000000000000000401 = { isa = PBXBuildFile; fileRef = 000000000000000000000301; };
+000000000000000000000302 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolyphonicCore.swift; sourceTree = "<group>"; };
+000000000000000000000402 = { isa = PBXBuildFile; fileRef = 000000000000000000000302; };
+000000000000000000000303 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MIDIInput.swift; sourceTree = "<group>"; };
+000000000000000000000403 = { isa = PBXBuildFile; fileRef = 000000000000000000000303; };
+000000000000000000000304 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrandStaffView.swift; sourceTree = "<group>"; };
+000000000000000000000404 = { isa = PBXBuildFile; fileRef = 000000000000000000000304; };
 }; rootObject = 000000000000000000000001; }

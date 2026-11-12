@@ -1,364 +1,426 @@
 import SwiftUI
+import UIKit
 
 @main
 struct PianoBloomApp: App {
     @StateObject private var model = PracticeModel()
     var body: some Scene {
-        WindowGroup { PracticeView(model: model).preferredColorScheme(.light) }
+        WindowGroup { GardenHome(model: model).preferredColorScheme(.light) }
     }
 }
 
-private enum Palette {
-    static let ink = Color(red: 0.12, green: 0.20, blue: 0.24)
-    static let green = Color(red: 0.12, green: 0.47, blue: 0.38)
-    static let cream = Color(red: 0.97, green: 0.97, blue: 0.94)
+enum Bloom {
+    static let pink = Color(red: 0.87, green: 0.28, blue: 0.51)
+    static let blush = Color(red: 1, green: 0.94, blue: 0.96)
+    static let ink = Color(red: 0.34, green: 0.24, blue: 0.35)
+    static let lilac = Color(red: 0.62, green: 0.48, blue: 0.78)
+    static let mint = Color(red: 0.24, green: 0.65, blue: 0.53)
 }
 
-struct PracticeView: View {
+struct GardenHome: View {
     @ObservedObject var model: PracticeModel
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @State private var showSettings = false
-    @State private var showHistory = false
-    @State private var showHelp = false
+    @State private var performing = false
+    @State private var settings = false
+    @State private var history = false
+    @State private var hanon = false
     var body: some View {
         NavigationStack {
-            practiceContent
-            .background(Palette.cream)
-            .navigationTitle("琴芽").navigationBarTitleDisplayMode(.inline)
+            GeometryReader { geometry in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 24) {
+                        welcome
+                        if geometry.size.width > 850 {
+                            HStack(alignment: .top, spacing: 24) {
+                                setup.frame(width: 310)
+                                library
+                            }
+                        } else {
+                            setup
+                            library
+                        }
+                    }.padding(geometry.size.width > 700 ? 32 : 20).frame(maxWidth: 1250).frame(maxWidth: .infinity)
+                }.background(Bloom.blush)
+            }
+            .navigationTitle("琴芽 · 小兔钢琴花园").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
-                    Button { showHelp = true } label: { Image(systemName: "questionmark.circle") }.accessibilityLabel("使用帮助")
-                    Button { showHistory = true } label: { Image(systemName: "clock.arrow.circlepath") }.accessibilityLabel("练习记录")
-                    Button { showSettings = true } label: { Image(systemName: "slider.horizontal.3") }.accessibilityLabel("设置")
+                    Button { history = true } label: { Image(systemName: "clock.arrow.circlepath") }.accessibilityLabel("练习记录")
+                    Button { settings = true } label: { Image(systemName: "slider.horizontal.3") }.accessibilityLabel("家长设置")
                 }
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                ControlsView(model: model, microphone: model.microphone)
-                    .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 8)
-                    .frame(maxWidth: 960).frame(maxWidth: .infinity)
-                    .background(Palette.cream)
+            .safeAreaInset(edge: .bottom, spacing: 0) { launchButton }
+            .sheet(isPresented: $settings) { ParentSettings(model: model) }
+            .sheet(isPresented: $history) { HistoryView(model: model) }
+            .fullScreenCover(isPresented: $performing) { PerformanceScreen(model: model) }
+            .onAppear {
+                #if DEBUG
+                if ProcessInfo.processInfo.arguments.contains("--preview-performance") {
+                    model.prepareScreenshot(); performing = true
+                }
+                #endif
             }
-            .sheet(isPresented: $showSettings) { SettingsView(model: model) }
-            .sheet(isPresented: $showHistory) { HistoryView(model: model) }
-            .sheet(isPresented: $showHelp) { HelpView() }
-            .sheet(isPresented: $model.showResult) { ResultView(model: model) }
-            .onChange(of: scenePhase) { phase in
-                // Permission prompts make a scene inactive. Do not cancel their callbacks.
-                if phase == .background { model.pause() }
-            }
-            .onChange(of: showSettings) { if $0 { model.pause() } }
-            .onChange(of: showHistory) { if $0 { model.pause() } }
-            .onChange(of: showHelp) { if $0 { model.pause() } }
-        }.tint(Palette.green)
+            .onChange(of: scenePhase) { if $0 == .background { model.pause() } }
+        }.tint(Bloom.pink)
     }
-    private var practiceContent: some View {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    if horizontalSizeClass == .regular { heading }
-                    Picker("练习方式", selection: Binding(get: { model.mode }, set: { model.changeMode($0) })) {
-                        ForEach(PracticeModel.Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                    }.pickerStyle(.segmented)
-                    MicrophoneCard(model: model, microphone: model.microphone)
-                    if model.mode == .practice {
-                        exercisePicker
-                        ScoreCard(model: model)
-                        feedback
-                    } else {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("让每一个声音，都有名字").font(.title3.bold())
-                            Text("一次弹一个琴键，音名和键盘会跟随琴声亮起。这里可以自由探索，不计对错。")
-                                .font(.subheadline).foregroundStyle(.secondary)
-                        }.padding(20).frame(maxWidth: .infinity, alignment: .leading).background(.white, in: RoundedRectangle(cornerRadius: 24))
-                    }
-                    keyboardSection
-                    HStack(spacing: 6) {
-                        Image(systemName: "lock.shield")
-                        Text("音频只在设备处理，不录音、不上传")
-                    }.font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity)
-                    Text("单音练习版 · 请关闭踏板，保持环境安静").font(.caption2).foregroundStyle(.secondary).frame(maxWidth: .infinity)
-                }.padding(.horizontal, 20).padding(.vertical, 16).frame(maxWidth: 960).frame(maxWidth: .infinity)
+    private var welcome: some View {
+        HStack(spacing: 20) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("BUNNY’S PIANO GARDEN").font(.system(size: 10, weight: .bold, design: .rounded)).tracking(2).foregroundStyle(Bloom.pink)
+                Text("今天，弹一点快乐吧").font(.system(size: 29, weight: .bold, design: .rounded)).foregroundStyle(Bloom.ink)
+                Text("让每一个音符，开成一朵小花。") .font(.subheadline).foregroundStyle(Bloom.ink.opacity(0.6))
+                HStack(spacing: 6) {
+                    Image(systemName: "sparkles")
+                    Text("小兔陪练  ·  双手一起成长")
+                }.font(.caption.bold()).foregroundStyle(Bloom.lilac).padding(.top, 4)
             }
+            Spacer(minLength: 0)
+            BunnyMascot().frame(width: 100, height: 118).accessibilityHidden(true)
+        }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
+            .background(LinearGradient(colors: [.white, Color(red: 1, green: 0.88, blue: 0.93)], startPoint: .leading, endPoint: .trailing), in: RoundedRectangle(cornerRadius: 30))
     }
-    @ViewBuilder private var keyboardSection: some View {
-        if model.mode == .practice {
-            DisclosureGroup("键盘示意") {
-                KeyboardView(detected: model.detected, expected: model.expected)
+    private var setup: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Label("布置我的小舞台", systemImage: "wand.and.stars").font(.headline).foregroundStyle(Bloom.ink)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("今天用哪只手？").font(.caption.bold()).foregroundStyle(.secondary)
+                Picker("演奏手", selection: Binding(get: { model.hands }, set: { model.configure(hands: $0) })) {
+                    ForEach(PracticeHands.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }.pickerStyle(.segmented)
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                Text("练习方式").font(.caption.bold()).foregroundStyle(.secondary)
+                Picker("练习方式", selection: Binding(get: { model.style }, set: { model.configure(style: $0) })) {
+                    ForEach(PlayStyle.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }.pickerStyle(.segmented)
+                Text(model.style == .follow ? "弹对再向前，小兔会等你。" : "按固定节拍演奏，结束后看看节奏星星。")
+                    .font(.caption).foregroundStyle(Bloom.lilac)
+            }
+            HStack {
+                Label("速度", systemImage: "metronome")
+                Spacer()
+                Stepper("\(Int(model.bpm)) BPM", value: Binding(get: { model.bpm }, set: { model.configure(bpm: $0) }), in: 30...120, step: 5)
+                    .font(.subheadline.monospacedDigit())
             }.font(.subheadline)
-        } else {
-            KeyboardView(detected: model.detected, expected: nil)
-        }
-    }
-    private var heading: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("PIANO BLOOM").font(.caption.weight(.bold)).tracking(3).foregroundStyle(Palette.green)
-                Text("听见你的每一点进步").font(.system(.title2, design: .rounded).bold()).foregroundStyle(Palette.ink)
-                Text("慢慢弹，琴芽陪你练。").font(.subheadline).foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 4)
-            Image(systemName: "leaf.fill").font(.system(size: 32)).foregroundStyle(Palette.green)
-                .frame(width: 56, height: 56).background(Palette.green.opacity(0.09), in: RoundedRectangle(cornerRadius: 18))
-        }
-    }
-    private var exercisePicker: some View {
-        HStack {
-            Text("今天练什么").font(.headline)
-            Spacer()
-            Menu {
-                ForEach(["入门旋律", "哈农 · 右手单音"], id: \.self) { group in
-                    Section(group) {
-                        ForEach(Exercise.all.filter { $0.group == group }) { exercise in
-                            Button(exercise.title) { model.select(exercise) }
-                        }
-                    }
-                }
-            } label: {
-                HStack(spacing: 6) { Text(model.exercise.title); Image(systemName: "chevron.down").font(.caption.bold()) }
-                    .font(.subheadline.weight(.semibold))
-            }.accessibilityLabel("选择练习曲，当前\(model.exercise.title)")
-        }
-    }
-    private var feedback: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: model.wrongNote == nil ? "sparkles" : "arrow.uturn.backward.circle")
-            Text(model.feedback).font(.subheadline.weight(.medium)).fixedSize(horizontal: false, vertical: true)
-        }.foregroundStyle(model.wrongNote == nil ? Palette.green : Color.orange)
-            .padding(16).frame(maxWidth: .infinity, alignment: .leading)
-            .background((model.wrongNote == nil ? Palette.green : Color.orange).opacity(0.07), in: RoundedRectangle(cornerRadius: 16))
-            .accessibilityElement(children: .combine)
-    }
-}
-
-private struct MicrophoneCard: View {
-    @ObservedObject var model: PracticeModel
-    @ObservedObject var microphone: Microphone
-    var body: some View {
-        VStack(spacing: 12) {
-            HStack {
-                Label(status, systemImage: microphone.listening ? "waveform" : "mic")
-                    .font(.caption.weight(.semibold))
-                Spacer()
-                Text(model.calibrated ? "中央 C 已校准" : "标准 C4 基准").font(.caption2)
-            }.foregroundStyle(.white.opacity(0.8))
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(model.detected.map(Music.name) ?? "—")
-                    .font(.system(size: 48, weight: .semibold, design: .rounded)).monospacedDigit()
-                Text(model.detected.map(Music.solfege) ?? "等待琴声").font(.title3).foregroundStyle(.white.opacity(0.7))
-            }.foregroundStyle(.white).frame(minHeight: 58)
-            if let frequency = model.frequency {
-                Text(String(format: "%.1f Hz   ·   %@%.0f 音分", frequency, model.cents >= 0 ? "+" : "", model.cents))
-                    .font(.caption.monospacedDigit()).foregroundStyle(.white.opacity(0.75))
-            } else {
-                Text(model.calibrating ? "请弹中央 C，保持约 1 秒" : "按下开始，再弹一个琴键")
-                    .font(.caption).foregroundStyle(.white.opacity(0.75))
-            }
-            GeometryReader { geometry in
-                Capsule().fill(.white.opacity(0.15)).overlay(alignment: .leading) {
-                    Capsule().fill(Color(red: 0.68, green: 0.90, blue: 0.63))
-                        .frame(width: geometry.size.width * min(1, max(0, microphone.level * 16)))
-                }
-            }.frame(height: 4).accessibilityLabel("麦克风音量")
-            if model.calibrating { ProgressView().tint(.white) }
-        }.padding(22)
-            .background(LinearGradient(colors: [Palette.ink, Palette.green], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 26))
-    }
-    private var status: String {
-        switch microphone.state {
-        case .listening: return model.calibrating ? "正在校准" : "正在聆听"
-        case .requesting: return "正在请求麦克风权限"
-        case .denied: return "麦克风权限未开启"
-        case .failed: return "麦克风暂不可用"
-        case .stopped: return "准备聆听"
-        }
-    }
-}
-
-private struct ScoreCard: View {
-    @ObservedObject var model: PracticeModel
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(model.exercise.title).font(.title3.bold())
-                    Text(model.exercise.subtitle).font(.caption).foregroundStyle(.secondary)
-                }
-                Spacer()
-                Text("\(model.progress.position) / \(model.progress.notes.count)")
-                    .font(.subheadline.monospacedDigit().bold()).foregroundStyle(Palette.green)
-            }
-            if model.exercise.id.hasPrefix("hanon-") {
+            InputSelector(model: model)
+            if model.score.isHanon {
                 Menu {
-                    Button("整首（含反复）") { model.selectSection(nil) }
-                    ForEach(Array(stride(from: 0, to: model.exercise.notes.count, by: 8)), id: \.self) { start in
-                        Button("第\(start + 1)–\(min(start + 8, model.exercise.notes.count))音") { model.selectSection(start) }
+                    Button("整首曲谱（含反复）") { model.selectSection(nil) }
+                    ForEach(Array(stride(from: 0, to: Int(ceil(model.score.length / Double(model.score.beatsPerBar))), by: 2)), id: \.self) { bar in
+                        Button("第 \(bar + 1)–\(bar + 2) 小节") { model.selectSection(bar) }
                     }
                 } label: {
-                    Label(model.sectionStart.map { "分段：第\($0 + 1)–\(min($0 + 8, model.exercise.notes.count))音" } ?? "整首练习 · 点击选择分段", systemImage: "music.note.list")
+                    Label(model.sectionBar.map { "第 \($0 + 1)–\($0 + 2) 小节" } ?? "整首练习 · 可选两小节", systemImage: "music.note.list")
                         .font(.subheadline)
                 }
             }
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 0) {
-                        Text("𝄞").font(.system(size: 65)).frame(width: 42, height: 132)
-                        ForEach(Array(model.progress.notes.enumerated()), id: \.offset) { index, note in
-                            ScoreNote(midi: note, state: index < model.progress.position ? .done : (index == model.progress.position ? (model.wrongNote == nil ? .current : .wrong) : .future))
-                                .id(index)
-                                .accessibilityLabel("第\(index + 1)个音，\(Music.name(note))")
-                        }
-                        Color.clear.frame(width: 100, height: 1)
-                    }.padding(.vertical, 4)
-                }.onChange(of: model.progress.position) { index in
-                    withAnimation(.easeInOut(duration: 0.25)) { proxy.scrollTo(index, anchor: .center) }
-                }.onChange(of: model.exercise.id) { _ in proxy.scrollTo(0, anchor: .leading) }
+        }.padding(22).frame(maxWidth: .infinity, alignment: .leading).background(.white, in: RoundedRectangle(cornerRadius: 26))
+    }
+    private var library: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("挑一首喜欢的曲子").font(.title3.bold()).foregroundStyle(Bloom.ink)
+                Spacer()
+                Text(hanon ? "20 首" : "3 首").font(.caption.bold()).foregroundStyle(Bloom.pink)
             }
-            ProgressView(value: Double(model.progress.position), total: Double(model.progress.notes.count)).tint(Palette.green)
-            Text("仅判断音符顺序；哈农按原谱反复展开，请单独弹右手。暂不评节奏、指法。").font(.caption2).foregroundStyle(.secondary)
-        }.padding(18).background(.white, in: RoundedRectangle(cornerRadius: 24))
+            Picker("曲库", selection: $hanon) { Text("星星启蒙").tag(false); Text("哈农花园").tag(true) }.pickerStyle(.segmented)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 210), spacing: 14)], spacing: 14) {
+                ForEach(PianoScore.all.filter { $0.isHanon == hanon }) { score in
+                    ScoreTile(score: score, selected: score.id == model.score.id) { model.select(score) }
+                }
+            }
+        }
+    }
+    private var launchButton: some View {
+        HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(model.score.title).font(.headline).foregroundStyle(Bloom.ink)
+                Text("\(model.hands.rawValue) · \(model.style.rawValue)").font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 4)
+            Button { model.pause(); performing = true } label: {
+                Label("进入小小音乐会", systemImage: "play.fill").font(.headline).padding(.horizontal, 12).padding(.vertical, 9)
+            }.buttonStyle(.borderedProminent).clipShape(Capsule())
+        }.padding(.horizontal, 24).padding(.vertical, 14).frame(maxWidth: 1186).frame(maxWidth: .infinity).background(.white)
     }
 }
 
-private struct ScoreNote: View {
-    enum State { case done, current, wrong, future }
-    let midi: Int
-    let state: State
-    private var color: Color {
-        switch state { case .done: return Palette.green; case .current: return Palette.ink; case .wrong: return .orange; case .future: return .gray }
-    }
+private struct ScoreTile: View {
+    let score: PianoScore
+    let selected: Bool
+    let action: () -> Void
     var body: some View {
-        VStack(spacing: 0) {
-            Canvas { context, size in
-                let x: CGFloat = size.width / 2
-                let bottom: CGFloat = 100
-                let y = bottom + 8 - CGFloat(Music.staffStep(midi)) * 4
-                var staff = Path()
-                for row in 0..<5 {
-                    let lineY = bottom - CGFloat(row) * 8
-                    staff.move(to: CGPoint(x: 0, y: lineY)); staff.addLine(to: CGPoint(x: size.width, y: lineY))
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Text(score.isHanon ? "🌷" : (score.id == "star" ? "⭐️" : score.id == "ode" ? "🎀" : "🌈"))
+                        .font(.system(size: 30)).frame(width: 58, height: 58).background(Bloom.blush, in: RoundedRectangle(cornerRadius: 18))
+                    Spacer()
+                    if selected { Image(systemName: "checkmark.circle.fill").foregroundStyle(Bloom.pink).font(.title3) }
+                    else { Image(systemName: "music.note").foregroundStyle(Bloom.lilac.opacity(0.4)) }
                 }
-                context.stroke(staff, with: .color(.gray.opacity(0.3)), lineWidth: 1)
-                if y >= bottom + 8 || y <= bottom - 40 {
-                    var ledger = Path()
-                    let start = y >= bottom + 8 ? bottom + 8 : bottom - 40
-                    let step: CGFloat = y >= bottom + 8 ? 8 : -8
-                    for lineY in stride(from: start, through: y, by: step) {
-                        ledger.move(to: CGPoint(x: x - 14, y: lineY)); ledger.addLine(to: CGPoint(x: x + 14, y: lineY))
-                    }
-                    context.stroke(ledger, with: .color(color), lineWidth: 1)
-                }
-                if state == .current || state == .wrong {
-                    let circle = Path(ellipseIn: CGRect(x: x - 20, y: y - 20, width: 40, height: 40))
-                    context.fill(circle, with: .color(color.opacity(0.09)))
-                }
-                context.fill(Path(ellipseIn: CGRect(x: x - 9, y: y - 6, width: 18, height: 12)), with: .color(color))
-                var stem = Path()
-                if y >= 52 { stem.move(to: CGPoint(x: x + 8, y: y)); stem.addLine(to: CGPoint(x: x + 8, y: y - 31)) }
-                else { stem.move(to: CGPoint(x: x - 8, y: y)); stem.addLine(to: CGPoint(x: x - 8, y: y + 31)) }
-                context.stroke(stem, with: .color(color), lineWidth: 1.6)
-            }.frame(width: 58, height: 164)
-            Text(Music.name(midi)).font(.caption.weight(state == .current ? .bold : .regular)).foregroundStyle(color)
-        }.padding(.bottom, 8)
+                Text(score.title).font(.system(size: 19, weight: .bold, design: .rounded)).foregroundStyle(Bloom.ink)
+                Text(score.detail).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.leading)
+                Label("\(score.beatsPerBar)/4 拍  ·  支持双手", systemImage: "hands.sparkles").font(.caption2.bold()).foregroundStyle(Bloom.lilac)
+            }.padding(20).frame(maxWidth: .infinity, minHeight: 185, alignment: .leading)
+                .background(.white, in: RoundedRectangle(cornerRadius: 24))
+                .overlay(RoundedRectangle(cornerRadius: 24).stroke(selected ? Bloom.pink : .clear, lineWidth: 2))
+        }.buttonStyle(.plain).accessibilityLabel("\(score.title)，\(selected ? "已选择" : "点击选择")")
     }
 }
 
-private struct KeyboardView: View {
-    let detected: Int?
-    let expected: Int?
-    private let whiteNotes = [60,62,64,65,67,69,71,72]
-    private let blackNotes = [(61, 1), (63, 2), (66, 4), (68, 5), (70, 6)]
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 14) {
-                Label("目标音", systemImage: "circle").foregroundStyle(Palette.green)
-                Label("听到的音", systemImage: "circle.fill").foregroundStyle(Color.orange)
-            }.font(.caption2)
-            GeometryReader { geometry in
-                let width = geometry.size.width / 8
-                ZStack(alignment: .topLeading) {
-                    HStack(spacing: 2) {
-                        ForEach(whiteNotes, id: \.self) { note in
-                            VStack {
-                                Spacer()
-                                if expected == note { Circle().stroke(Palette.green, lineWidth: 2).frame(width: 12, height: 12) }
-                                Text(Music.name(note)).font(.caption2).foregroundStyle(.secondary)
-                            }.padding(.bottom, 8).frame(maxWidth: .infinity).frame(height: 104)
-                                .background(detected == note ? Color.orange.opacity(0.25) : .white, in: UnevenKey())
-                        }
-                    }
-                    ForEach(blackNotes, id: \.0) { item in
-                        RoundedRectangle(cornerRadius: 4).fill(detected == item.0 ? Color.orange : Palette.ink)
-                            .frame(width: width * 0.56, height: 64).offset(x: width * CGFloat(item.1) - width * 0.28)
-                    }
-                }
-            }.frame(height: 104)
-        }.padding(14).background(Palette.ink.opacity(0.04), in: RoundedRectangle(cornerRadius: 18))
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("键盘示意，目标\(expected.map(Music.name) ?? "无")，听到\(detected.map(Music.name) ?? "无")")
-    }
-}
-private struct UnevenKey: Shape {
-    func path(in rect: CGRect) -> Path { Path(roundedRect: rect, cornerRadius: 5) }
-}
-
-private struct ControlsView: View {
+private struct InputSelector: View {
     @ObservedObject var model: PracticeModel
-    @ObservedObject var microphone: Microphone
-    @Environment(\.openURL) private var openURL
+    @ObservedObject private var midi: MIDIInput
+    init(model: PracticeModel) { self.model = model; self.midi = model.midi }
     var body: some View {
-        VStack(spacing: 12) {
-            if case .denied = microphone.state {
-                Text("需要麦克风权限才能听见钢琴。请在系统设置中允许琴芽访问麦克风。").font(.subheadline)
-                Button("打开系统设置") { if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) } }.buttonStyle(.bordered)
-            }
-            if case let .failed(message) = microphone.state {
-                Text("收音失败：\(message)。请检查麦克风连接后重试。").font(.caption).foregroundStyle(.red)
-            }
-            Button { model.toggle() } label: {
-                Label(microphone.listening || microphone.requesting ? "暂停聆听" : (model.progress.complete && model.mode == .practice ? "再练一次" : "开始聆听"), systemImage: microphone.listening ? "pause.fill" : "mic.fill")
-                    .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 8)
-            }.buttonStyle(.borderedProminent).controlSize(.large)
-            HStack(spacing: 12) {
-                Button { if model.calibrating { model.pause() } else { model.calibrate() } } label: {
-                    Label(model.calibrating ? "取消校准" : "校准中央 C", systemImage: "tuningfork").frame(maxWidth: .infinity)
+        VStack(alignment: .leading, spacing: 8) {
+            Picker("钢琴连接", selection: Binding(get: { model.input }, set: { model.configure(input: $0) })) {
+                ForEach(PianoInput.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }.pickerStyle(.segmented)
+            if model.input == .midi {
+                if midi.sources.isEmpty {
+                    Text("用 USB 线或转接器连接电钢琴，即可准确判断双手与节奏。").font(.caption).foregroundStyle(.secondary)
+                    Button("刷新钢琴连接") { midi.refresh() }.font(.caption.bold())
+                } else {
+                    Picker("已连接钢琴", selection: Binding(get: { midi.selected }, set: { midi.select($0) })) {
+                        ForEach(midi.sources) { Text($0.name).tag($0.id) }
+                    }.font(.caption)
                 }
-                if model.mode == .practice {
-                    Button { model.restart() } label: { Label("重新练习", systemImage: "arrow.counterclockwise").frame(maxWidth: .infinity) }
-                }
-            }.font(.subheadline).buttonStyle(.bordered).controlSize(.large)
-            if model.calibrating { Text(model.feedback).font(.caption).foregroundStyle(Palette.green) }
+            } else {
+                Text(model.hands == .both ? "双手识音为测试功能，八度与踏板可能误判；正式评分推荐 USB MIDI。" : "在安静环境练习，先松开踏板；麦克风节奏分为估算。")
+                    .font(.caption).foregroundStyle(Bloom.lilac)
+            }
         }
     }
 }
 
-private struct SettingsView: View {
+struct PerformanceScreen: View {
     @ObservedObject var model: PracticeModel
+    @ObservedObject private var microphone: Microphone
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
+    init(model: PracticeModel) { self.model = model; self.microphone = model.microphone }
+    var body: some View {
+        GeometryReader { geometry in
+            let wide = geometry.size.width > 700
+            let short = geometry.size.height < 500
+            VStack(spacing: short ? 8 : 14) {
+                header(wide: wide)
+                if !short { sessionStrip(wide: wide) }
+                ZStack {
+                    GrandStaffView(model: model, wide: wide)
+                    if let count = model.countIn { countIn(count) }
+                    if !model.running && !model.microphone.requesting && model.performance.epoch == nil { readyOverlay }
+                }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(.white, in: RoundedRectangle(cornerRadius: 26))
+                    .overlay(RoundedRectangle(cornerRadius: 26).stroke(Bloom.pink.opacity(0.08), lineWidth: 1))
+                if wide && !short { PerformanceKeyboard(heard: model.heard, target: model.target).frame(height: 88) }
+                controls(wide: wide)
+            }.padding(.horizontal, wide ? 28 : 12).padding(.top, short ? 4 : 16).padding(.bottom, 8)
+                .background(Bloom.blush)
+                .overlay { if model.showResult { ResultGarden(model: model) { model.showResult = false; dismiss() } } }
+        }
+        .tint(Bloom.pink).interactiveDismissDisabled()
+         .onAppear {
+            UIApplication.shared.isIdleTimerDisabled = true
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--preview-landscape") {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                    let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+                    scene?.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeLeft))
+                }
+            }
+            #endif
+        }
+        .onDisappear { model.pause(); UIApplication.shared.isIdleTimerDisabled = false }
+    }
+    private func header(wide: Bool) -> some View {
+        HStack(spacing: 14) {
+            Button { model.pause(); dismiss() } label: {
+                Image(systemName: "chevron.left").font(.headline).frame(width: 44, height: 44).background(.white, in: Circle())
+            }.accessibilityLabel("暂停并返回曲库")
+            VStack(alignment: .leading, spacing: 3) {
+                Text(model.score.title).font(.system(size: wide ? 25 : 19, weight: .bold, design: .rounded)).foregroundStyle(Bloom.ink)
+                Text("\(model.hands.rawValue) · \(model.style.rawValue) · \(Int(model.bpm)) BPM")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+            if wide {
+                HStack(spacing: 5) {
+                    ForEach(0..<3, id: \.self) { index in Image(systemName: "star.fill").foregroundStyle(model.performance.correctCount > index * 8 ? Color.orange : Bloom.pink.opacity(0.18)) }
+                }.font(.title3)
+                BunnyMascot().frame(width: 62, height: 70).accessibilityHidden(true)
+            } else {
+                Text("\(model.performance.position)/\(model.performance.score.events.count)").font(.caption.monospacedDigit()).foregroundStyle(Bloom.pink)
+            }
+        }
+    }
+    private func sessionStrip(wide: Bool) -> some View {
+        HStack(spacing: 12) {
+            HStack(spacing: 6) {
+                ForEach(0..<model.score.beatsPerBar, id: \.self) { index in
+                    let active = model.running && (Int(floor(model.beat)) % model.score.beatsPerBar + model.score.beatsPerBar) % model.score.beatsPerBar == index
+                    Circle().fill(active ? Bloom.pink : Bloom.pink.opacity(0.16)).frame(width: active ? 12 : 8, height: active ? 12 : 8)
+                }
+            }.frame(width: 72)
+            Text(model.feedback).font(.system(size: wide ? 15 : 12, weight: .medium, design: .rounded)).foregroundStyle(Bloom.ink).lineLimit(2)
+            Spacer(minLength: 0)
+            if wide {
+                Text(model.style == .rhythm ? "节奏 \(model.performance.rhythmScore.map { "\($0)" } ?? "—")" : "已点亮 \(model.performance.correctCount) 颗")
+                    .font(.subheadline.bold()).foregroundStyle(Bloom.lilac)
+            }
+        }.padding(.horizontal, 16).frame(minHeight: 44).background(.white.opacity(0.7), in: Capsule())
+    }
+    private var readyOverlay: some View {
+        VStack(spacing: 14) {
+            Text("准备好，让音符开花了吗？").font(.headline).foregroundStyle(Bloom.ink)
+            Text("先数 \(model.score.beatsPerBar) 拍，再开始弹奏").font(.subheadline).foregroundStyle(.secondary)
+            Button { model.toggle() } label: { Label("开始演奏", systemImage: "play.fill").font(.headline).padding(8) }
+                .buttonStyle(.borderedProminent).clipShape(Capsule())
+        }.padding(26).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 26)).padding(14)
+    }
+    private func countIn(_ count: Int) -> some View {
+        VStack(spacing: 4) {
+            Text("预备").font(.headline)
+            Text("\(count)").font(.system(size: 76, weight: .bold, design: .rounded))
+        }.foregroundStyle(Bloom.pink).frame(width: 160, height: 160).background(.regularMaterial, in: Circle())
+    }
+    private func controls(wide: Bool) -> some View {
+        VStack(spacing: 6) {
+            if microphone.state == .denied {
+                Button("允许麦克风后继续：打开系统设置") { if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) } }.font(.caption)
+            }
+            if case let .failed(message) = microphone.state { Text(message).font(.caption).foregroundStyle(.orange) }
+            HStack(spacing: 12) {
+                Button { model.restart() } label: { Label("重来", systemImage: "arrow.counterclockwise").font(.subheadline.bold()).frame(minWidth: 64, minHeight: 44) }
+                Spacer(minLength: 0)
+                VStack(spacing: 2) {
+                    Text(model.inputDescription).font(.caption.bold()).foregroundStyle(Bloom.ink)
+                    if model.isEstimate { Text("识音与节奏结果为估算").font(.caption2).foregroundStyle(Bloom.lilac) }
+                }
+                Spacer(minLength: 0)
+                Button { model.toggle() } label: {
+                    Label(model.running || microphone.requesting ? "暂停" : "开始", systemImage: model.running ? "pause.fill" : "play.fill")
+                        .font(.headline).frame(minWidth: wide ? 120 : 70, minHeight: 34)
+                }.buttonStyle(.borderedProminent).clipShape(Capsule())
+            }
+        }
+    }
+}
+
+struct PerformanceKeyboard: View {
+    let heard: Set<Int>
+    let target: Set<Int>
+    var body: some View {
+        Canvas { context, size in
+            let whites = (33...88).filter { [0,2,4,5,7,9,11].contains($0 % 12) }
+            let width = size.width / CGFloat(whites.count)
+            for (index, note) in whites.enumerated() {
+                let rect = CGRect(x: CGFloat(index) * width + 0.5, y: 0, width: width - 1, height: size.height)
+                let path = Path(roundedRect: rect, cornerRadius: 4)
+                context.fill(path, with: .color(heard.contains(note) ? Bloom.pink.opacity(0.45) : .white))
+                context.stroke(path, with: .color(Bloom.pink.opacity(0.12)), lineWidth: 1)
+                if target.contains(note) {
+                    context.draw(Text("●").font(.system(size: 9)).foregroundColor(Bloom.pink), at: CGPoint(x: rect.midX, y: size.height - 14))
+                }
+                if note % 12 == 0 { context.draw(Text(Music.name(note)).font(.system(size: 8)).foregroundColor(.gray), at: CGPoint(x: rect.midX, y: size.height - 5)) }
+            }
+            for note in 33...88 where !whites.contains(note) {
+                guard let before = whites.lastIndex(where: { $0 < note }) else { continue }
+                let rect = CGRect(x: CGFloat(before + 1) * width - width * 0.3, y: 0, width: width * 0.6, height: size.height * 0.62)
+                context.fill(Path(roundedRect: rect, cornerRadius: 3), with: .color(heard.contains(note) ? Bloom.pink : Bloom.ink))
+            }
+        }.accessibilityLabel("钢琴键盘，目标音\(target.sorted().map(Music.name).joined(separator: "、"))")
+    }
+}
+
+struct BunnyMascot: View {
+    var body: some View {
+        Canvas { context, size in
+            func ellipse(_ x: Double, _ y: Double, _ w: Double, _ h: Double, _ color: Color) {
+                context.fill(Path(ellipseIn: CGRect(x: size.width * x, y: size.height * y, width: size.width * w, height: size.height * h)), with: .color(color))
+            }
+            ellipse(0.05,0.14,0.9,0.8,Color.white.opacity(0.6))
+            ellipse(0.23,0.02,0.20,0.51,.white); ellipse(0.56,0,0.20,0.52,.white)
+            ellipse(0.29,0.07,0.08,0.34,Color(red: 1, green: 0.72, blue: 0.82)); ellipse(0.62,0.06,0.08,0.35,Color(red: 1, green: 0.72, blue: 0.82))
+            ellipse(0.12,0.34,0.76,0.61,.white)
+            ellipse(0.20,0.65,0.17,0.10,Bloom.pink.opacity(0.22)); ellipse(0.64,0.65,0.17,0.10,Bloom.pink.opacity(0.22))
+            ellipse(0.33,0.57,0.045,0.065,Bloom.ink); ellipse(0.64,0.57,0.045,0.065,Bloom.ink)
+            context.draw(Text("ω").font(.system(size: size.width * 0.18, weight: .medium)).foregroundColor(Bloom.pink), at: CGPoint(x: size.width * 0.51, y: size.height * 0.72))
+            context.draw(Text("✿").font(.system(size: size.width * 0.32)).foregroundColor(Bloom.pink), at: CGPoint(x: size.width * 0.79, y: size.height * 0.43))
+        }
+    }
+}
+
+private struct ResultGarden: View {
+    @ObservedObject var model: PracticeModel
+    let close: () -> Void
+    var body: some View {
+        ZStack {
+            Bloom.blush.ignoresSafeArea()
+            ScrollView {
+                VStack(spacing: 22) {
+                    BunnyMascot().frame(width: 140, height: 160)
+                    Text("今天的音乐，开花啦！").font(.system(size: 28, weight: .bold, design: .rounded)).foregroundStyle(Bloom.ink)
+                    if let result = model.latestResult {
+                        Text("\(result.title) · \(result.hands ?? "")").font(.headline).foregroundStyle(Bloom.lilac)
+                        HStack(spacing: 36) {
+                            score("音符", value: result.accuracy)
+                            if let rhythm = result.rhythm { score("节奏", value: rhythm) }
+                        }.padding(24).background(.white, in: RoundedRectangle(cornerRadius: 28))
+                        Text("点亮 \(result.count) 组音符 · 漏弹 \(result.missed ?? 0) 组 · \(result.seconds) 秒").font(.subheadline).foregroundStyle(.secondary)
+                        if result.source == "麦克风估算" { Text("麦克风估算结果；双手八度与踏板可能影响准确性。") .font(.caption).foregroundStyle(Bloom.lilac) }
+                        Text(result.rhythm == nil ? "这次是自由跟谱练习，没有节奏评分。" : "节奏分按固定速度下的起音时间计算；漏弹记 0 分。")
+                            .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    }
+                    Button("再开一朵小花") { model.restart() }.buttonStyle(.borderedProminent).controlSize(.large).clipShape(Capsule())
+                    Button("回到钢琴花园", action: close).font(.headline)
+                }.padding(32).frame(maxWidth: 650).frame(maxWidth: .infinity)
+            }
+        }
+    }
+    private func score(_ label: String, value: Int) -> some View {
+        VStack { Text("\(value)").font(.system(size: 52, weight: .bold, design: .rounded)).foregroundStyle(Bloom.pink); Text("\(label)星星").font(.subheadline).foregroundStyle(Bloom.ink) }
+    }
+}
+
+private struct ParentSettings: View {
+    @ObservedObject var model: PracticeModel
+    @ObservedObject private var microphone: Microphone
+    @Environment(\.dismiss) private var dismiss
+    init(model: PracticeModel) { self.model = model; self.microphone = model.microphone }
     var body: some View {
         NavigationStack {
             Form {
-                Section("中央 C 基准") {
-                    LabeledContent("当前频率", value: String(format: "%.2f Hz", model.reference))
-                    Text(model.calibrated ? "已保存你的钢琴校准值。" : "使用标准音高 A4 = 440 Hz 对应的中央 C。")
-                        .font(.caption).foregroundStyle(.secondary)
+                Section("麦克风与音高") {
+                    Slider(value: $model.sensitivity, in: 0...1) { Text("麦克风灵敏度") }
+                    Text("向左忽略背景声，向右捕捉轻音。").font(.caption)
+                    LabeledContent("中央 C", value: String(format: "%.2f Hz", model.reference))
+                    Button(model.calibrating ? "取消校准" : "校准中央 C") { if model.calibrating { model.pause() } else { model.calibrate() } }
+                    Text(model.feedback).font(.caption).foregroundStyle(.secondary)
+                    if microphone.state == .denied { Text("麦克风未授权，请在系统设置 → 琴芽中打开麦克风权限。").font(.caption).foregroundStyle(.orange) }
                     Button("恢复标准音高") { model.resetCalibration() }
                 }
-                Section("麦克风灵敏度") {
-                    Slider(value: $model.sensitivity, in: 0...1).accessibilityLabel("麦克风灵敏度")
-                    HStack { Text("忽略背景声"); Spacer(); Text("捕捉轻音") }.font(.caption)
-                    Text("安静时仍频繁出现音名，请向左调；轻弹没有反应，请向右调。校准和练习使用同一个设置。")
-                        .font(.caption).foregroundStyle(.secondary)
+                Section("麦克风节奏补偿") {
+                    Slider(value: $model.latencyMS, in: -300...300, step: 10)
+                    Text("当前 \(Int(model.latencyMS)) 毫秒：正值会把识别起音向前移动。仅补偿设备延迟，不改变固定节拍网格。")
+                        .font(.caption)
                 }
-                Section("关于琴芽") {
-                    Text("PianoBloom 1.0 · 单音练习版")
-                    Text("本机处理音频；只保存校准值、灵敏度与最近 30 次完整练习记录。不保存录音。")
-                    Text("内置哈农第 1–20 首右手曲谱，可整首或每 8 音分段练习。")
-                    Text("曲谱改编自 Mutopia，Steve Taylor / Javier Ruiz-Alma，CC BY-SA 4.0。")
-                    Link("曲谱来源与授权", destination: URL(string: "https://www.mutopiaproject.org/ftp/HanonCL/virtuoso-pianist-pt1/")!)
-                    Text("暂不支持双手和弦、踏板混音、导入曲谱和节奏评分。")
+                Section("给家长的话") {
+                    Text("USB MIDI 可以直接读到两只手按下的琴键，是双手与节奏评分的推荐方式。")
+                    Text("真钢琴麦克风双手识别仍在测试中，无法保证区分八度音和泛音；请关闭踏板、保持安静，并把麦克风结果作为参考。")
+                    Text("跟谱练习会等孩子弹对；节奏挑战在一小节预备后按固定速度前进，漏弹不会暂停谱面。节奏分仅评价起音时间，不评价力度、指法或松键时长。")
+                    Text("哈农速度以四分音符为一拍；例如 60 BPM 下十六分音符间隔 250 毫秒。")
+                    Text("曲谱与所有音频分析均在设备运行，不保存录音、不上传声音。")
                 }
-            }.navigationTitle("设置").toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
-        }
+                Section("琴谱与署名") {
+                    Text("PianoBloom 2.0 · 小兔钢琴花园")
+                    Text("哈农 1–20：Steve Taylor / Javier Ruiz-Alma，Mutopia，CC BY-SA 4.0。保留双手、时值，展开原谱反复。启蒙双手曲为本 App 教学改编。")
+                    Link("查看曲谱来源", destination: URL(string: "https://www.mutopiaproject.org/ftp/HanonCL/virtuoso-pianist-pt1/")!)
+                }
+            }.navigationTitle("家长设置").toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { model.pause(); dismiss() } } }
+        }.onDisappear { model.pause() }
     }
 }
 
@@ -368,68 +430,15 @@ private struct HistoryView: View {
     var body: some View {
         NavigationStack {
             List {
-                if model.results.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("第一片琴芽，等你点亮。").font(.headline)
-                        Text("完整练完一首曲子后，记录就会出现在这里。").foregroundStyle(.secondary)
-                    }.padding(.vertical)
-                }
+                if model.results.isEmpty { Text("第一朵音乐小花，等你来点亮。") }
                 ForEach(model.results) { result in
-                    VStack(alignment: .leading, spacing: 7) {
-                        HStack { Text(result.title).font(.headline); Spacer(); Text("\(result.accuracy)%").foregroundStyle(Palette.green) }
-                        Text("\(result.count) 个正确音 · \(result.mistakes) 次错音 · \(result.seconds) 秒").font(.caption)
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack { Text(result.title).font(.headline); Spacer(); Text("\(result.accuracy) 分").foregroundStyle(Bloom.pink) }
+                        Text("\(result.hands ?? "单音") · \(result.source ?? "麦克风估算") · 节奏 \(result.rhythm.map { "\($0) 分" } ?? "未评分")").font(.caption)
                         Text(result.date, style: .date).font(.caption2).foregroundStyle(.secondary)
-                    }.padding(.vertical, 6)
+                    }.padding(.vertical, 8)
                 }
-            }.navigationTitle("练习记录").toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
-        }
-    }
-}
-
-private struct ResultView: View {
-    @ObservedObject var model: PracticeModel
-    @Environment(\.dismiss) private var dismiss
-    var body: some View {
-        VStack(spacing: 22) {
-            Spacer()
-            Image(systemName: "leaf.circle.fill").font(.system(size: 80)).foregroundStyle(Palette.green)
-            Text("又长出一片新叶子").font(.title.bold())
-            if let result = model.latestResult {
-                Text(result.title).font(.title3).foregroundStyle(.secondary)
-                Text("\(result.accuracy)%").font(.system(size: 64, weight: .semibold, design: .rounded)).foregroundStyle(Palette.green)
-                Text("音符准确率").foregroundStyle(.secondary)
-                Text("弹对 \(result.count) 个音   ·   错音 \(result.mistakes) 次   ·   用时 \(result.seconds) 秒").font(.subheadline)
-                Text("准确率 = 正确音 ÷（正确音 + 错音），不评价节奏。").font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer()
-            Button("再练一次") { model.restart(); dismiss() }.buttonStyle(.borderedProminent).controlSize(.large)
-            Button("回到琴谱") { dismiss() }.padding(.bottom, 20)
-        }.padding(24).frame(maxWidth: .infinity).background(Palette.cream)
-    }
-}
-
-private struct HelpView: View {
-    @Environment(\.dismiss) private var dismiss
-    var body: some View {
-        NavigationStack {
-            List {
-                Section("第一次练习") {
-                    Label("把手机或 iPad 放在钢琴旁约 30–80 厘米，关闭踏板。", systemImage: "1.circle")
-                    Label("点击「校准中央 C」，允许麦克风访问。弹中央 C（C4）并保持约 1 秒。", systemImage: "2.circle")
-                    Label("校准完成后松开琴键，等余音变小，再弹高亮音符。", systemImage: "3.circle")
-                    Label("弹对后琴谱自动前进，弹错会停下来等待。", systemImage: "4.circle")
-                }
-                Section("重复音怎么弹？") {
-                    Text("重新抬指、按键；App 会尝试根据新的击键音量变化判断。若余音导致卡住，请松开琴键等待片刻再弹，或者降低灵敏度。")
-                }
-                Section("识别不稳定？") {
-                    Text("靠近钢琴，关闭背景音乐和踏板，避免边弹边说话。一次只弹一个音。支持识别约 B2–F6；和弦、强混响及噪声可能导致误判。")
-                    Text("校准只能修正整台琴的整体音高偏移，不能代替钢琴调律。练习可使用默认标准音高，无需每次校准。")
-                }
-                Section("来电、切后台和换耳机") {
-                    Text("收音会暂停，进度保留。回到 App 后点击「开始聆听」继续；不会在后台录音。建议使用设备内置麦克风。")
-                }
-            }.navigationTitle("使用帮助").toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+            }.navigationTitle("我的音乐小花").toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
         }
     }
 }

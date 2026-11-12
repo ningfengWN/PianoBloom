@@ -4,6 +4,7 @@ struct PitchFrame {
     var frequency: Double?
     var rms: Double
     var time: Double
+    var polyphony: PolyphonicFrame? = nil
 }
 
 enum PitchDetector {

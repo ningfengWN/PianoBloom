@@ -7,7 +7,10 @@ final class Microphone: ObservableObject {
     enum State: Equatable { case stopped, requesting, listening, denied, failed(String) }
     @Published private(set) var state: State = .stopped
     @Published private(set) var level = 0.0
+    var onReady: (() -> Void)?
     var onFrame: ((PitchFrame) -> Void)?
+    var polyphonic = false
+    var reference = Music.standardC
     var onStop: (() -> Void)?
     private var engine: AVAudioEngine?
     private var tapInstalled = false
@@ -60,16 +63,17 @@ final class Microphone: ObservableObject {
             guard format.sampleRate >= 8000, format.channelCount > 0 else {
                 throw NSError(domain: "PianoBloom", code: 1, userInfo: [NSLocalizedDescriptionKey: "没有找到可用的麦克风"])
             }
-            let analyzer = StreamAnalyzer(rate: format.sampleRate)
+            let analyzer = StreamAnalyzer(rate: format.sampleRate, polyphonic: polyphonic, reference: reference)
             let capacity = DispatchSemaphore(value: 2)
-            input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+            input.installTap(onBus: 0, bufferSize: 512, format: format) { [weak self] buffer, audioTime in
                 guard let self, let channel = buffer.floatChannelData?[0],
                       capacity.wait(timeout: .now()) == .success else { return }
                 // Copy before leaving the callback: AVAudioEngine owns the buffer memory.
                 let samples = Array(UnsafeBufferPointer(start: channel, count: Int(buffer.frameLength)))
+                let endTime = (audioTime.isHostTimeValid ? AVAudioTime.seconds(forHostTime: audioTime.hostTime) : ProcessInfo.processInfo.systemUptime) + Double(buffer.frameLength) / format.sampleRate
                 self.queue.async {
                     defer { capacity.signal() }
-                    guard let frame = analyzer.append(samples) else { return }
+                    guard let frame = analyzer.append(samples, endTime: endTime) else { return }
                     DispatchQueue.main.async { [weak self] in
                         guard let self, self.generation == token, self.listening else { return }
                         self.level = frame.rms
@@ -81,6 +85,7 @@ final class Microphone: ObservableObject {
             e.prepare()
             try e.start()
             state = .listening
+            onReady?()
         } catch {
             stop()
             state = .failed(error.localizedDescription)
@@ -106,12 +111,17 @@ private final class StreamAnalyzer {
     private var partialCount = 0
     private var samples: [Float] = []
     private var newCount = 0
-    init(rate: Double) {
+    private let polyphonic: Bool
+    private let reference: Double
+    private var envelope = 0.0
+    private var onsetTime: Double?
+    init(rate: Double, polyphonic: Bool, reference: Double) {
+        self.polyphonic = polyphonic; self.reference = reference
         stride = max(1, Int(ceil(rate / 16000)))
         self.rate = rate / Double(stride)
         samples.reserveCapacity(8192)
     }
-    func append(_ input: [Float]) -> PitchFrame? {
+    func append(_ input: [Float], endTime: Double) -> PitchFrame? {
         for x in input {
             partial += Double(x); partialCount += 1
             if partialCount == stride {
@@ -119,10 +129,21 @@ private final class StreamAnalyzer {
                 newCount += 1; partial = 0; partialCount = 0
             }
         }
-        guard samples.count >= 2048, newCount >= 512 else { return nil }
-        let window = Array(samples.suffix(2048))
+        let count = polyphonic ? 4096 : 2048
+        guard samples.count >= count, newCount >= 256 else { return nil }
+        let window = Array(samples.suffix(count))
         samples = window
         newCount = 0
-        return PitchDetector.analyze(window, sampleRate: rate, time: ProcessInfo.processInfo.systemUptime)
+        let short = window.suffix(256)
+        let level = sqrt(short.reduce(0.0) { $0 + Double($1 * $1) } / Double(short.count))
+        if level > max(0.005, envelope * 1.7) { onsetTime = endTime - Double(short.count) / rate }
+        envelope = max(level, envelope * 0.87)
+        var frame = PitchDetector.analyze(Array(window.suffix(2048)), sampleRate: rate, time: endTime)
+        if polyphonic {
+            var poly = PolyphonicDetector.analyze(window, sampleRate: rate, reference: reference, time: endTime)
+            if let onsetTime, endTime - onsetTime < 0.22 { poly.onsetTime = onsetTime }
+            frame.polyphony = poly
+        }
+        return frame
     }
 }

@@ -1,0 +1,173 @@
+import Foundation
+
+enum PracticeHands: String, CaseIterable, Codable { case right = "右手", left = "左手", both = "双手" }
+enum PlayStyle: String, CaseIterable { case follow = "跟谱练习", rhythm = "节奏挑战" }
+
+struct ScoreEvent: Equatable {
+    let beat: Double
+    let duration: Double
+    let right: [Int]
+    let left: [Int]
+    func pitches(_ hands: PracticeHands) -> Set<Int> {
+        Set(hands == .right ? right : hands == .left ? left : right + left)
+    }
+}
+
+struct PianoScore: Identifiable {
+    let id: String
+    let title: String
+    let detail: String
+    let beatsPerBar: Int
+    let events: [ScoreEvent]
+    var isHanon: Bool { id.hasPrefix("hanon-") }
+    var length: Double { (events.last.map { $0.beat + $0.duration }) ?? 0 }
+    func excerpt(_ bar: Int?) -> PianoScore {
+        guard let bar else { return self }
+        let start = Double(bar * beatsPerBar)
+        let selected = events.filter { $0.beat >= start && $0.beat < start + Double(beatsPerBar * 2) }
+        return PianoScore(id: id, title: title, detail: "第 \(bar + 1)–\(bar + 2) 小节", beatsPerBar: beatsPerBar,
+                          events: selected.map { ScoreEvent(beat: $0.beat - start, duration: $0.duration, right: $0.right, left: $0.left) })
+    }
+    static let all: [PianoScore] = starters + HanonScores.all
+    static let starters: [PianoScore] = [
+        PianoScore(id: "star", title: "小星星", detail: "双手启蒙改编 · 一起摘星星", beatsPerBar: 4, events: melody(
+            [60,60,67,67,69,69,67,65,65,64,64,62,62,60,67,67,65,65,64,64,62,67,67,65,65,64,64,62,60,60,67,67,69,69,67,65,65,64,64,62,62,60],
+            longAt: [6,13,20,27,34,41], bass: [48,53,48,55,48,55,48,55,48,53,48,55])),
+        PianoScore(id: "ode", title: "欢乐颂", detail: "双手启蒙改编 · 小小音乐会", beatsPerBar: 4, events: melody(
+            [64,64,65,67,67,65,64,62,60,60,62,64,64,62,62], longAt: [14], bass: [48,55,48,55])),
+        PianoScore(id: "scale", title: "彩虹音阶", detail: "C 大调 · 双手相隔一个八度", beatsPerBar: 4,
+                   events: [60,62,64,65,67,69,71,72,71,69,67,65,64,62,60].enumerated().map {
+                       ScoreEvent(beat: Double($0.offset), duration: $0.offset == 14 ? 2 : 1, right: [$0.element], left: [$0.element - 12])
+                   })
+    ]
+    private static func melody(_ notes: [Int], longAt: Set<Int>, bass: [Int]) -> [ScoreEvent] {
+        var beat = 0.0
+        return notes.enumerated().map { index, note in
+            let duration = longAt.contains(index) ? 2.0 : 1.0
+            defer { beat += duration }
+            // One lower note per melody onset keeps both hands visible and individually testable.
+            return ScoreEvent(beat: beat, duration: duration, right: [note], left: [bass[min(bass.count - 1, Int(beat) / 4)]])
+        }
+    }
+}
+
+enum NoteGrade: String { case perfect, early, late, wrong, missed }
+struct EventJudgment {
+    let grade: NoteGrade
+    let error: Double?
+    let heard: Set<Int>
+}
+
+/// Uses an absolute beat grid: late notes never move the grid or improve future scores.
+/// Pause shifts its epoch; count-in and the final note's duration are part of the session.
+struct Performance {
+    let score: PianoScore
+    let hands: PracticeHands
+    let style: PlayStyle
+    let bpm: Double
+    private(set) var judgments: [Int: EventJudgment] = [:]
+    private(set) var position = 0
+    private(set) var epoch: Double?
+    private(set) var pauseTime: Double?
+    private(set) var mistakes = 0
+    private(set) var finished = false
+    private var pending: Set<Int> = []
+    private var pendingTime: Double?
+    private var lastAttempt = -Double.infinity
+    var secondsPerBeat: Double { 60 / bpm }
+    // At slow tempos a sixteenth note still has its own nonoverlapping window.
+    var window: Double {
+        let spacing = score.events.dropFirst().enumerated().map { $0.element.beat - score.events[$0.offset].beat }.filter { $0 > 0 }.min() ?? 1
+        return min(0.23, spacing * secondsPerBeat * 0.48)
+    }
+    var correctCount: Int { judgments.values.filter { $0.grade != .wrong && $0.grade != .missed }.count }
+    var missedCount: Int { judgments.values.filter { $0.grade == .missed }.count }
+    var pitchScore: Int {
+        let denominator = finished ? score.events.count + mistakes : judgments.count + mistakes
+        return Int((100 * Double(correctCount) / Double(max(1, denominator))).rounded())
+    }
+    var rhythmScore: Int? {
+        guard style == .rhythm, !judgments.isEmpty else { return nil }
+        let sum = judgments.values.reduce(0.0) { value, judgment in
+            guard let error = judgment.error, judgment.grade != .wrong && judgment.grade != .missed else { return value }
+            return value + max(0, 1 - abs(error) / window)
+        }
+        let denominator = finished ? score.events.count : judgments.count
+        return Int((100 * sum / Double(max(1, denominator))).rounded())
+    }
+    init(score: PianoScore, hands: PracticeHands, style: PlayStyle, bpm: Double) {
+        self.score = score; self.hands = hands; self.style = style; self.bpm = min(160, max(20, bpm))
+    }
+    mutating func start(at time: Double) {
+        if let pauseTime, let epoch { self.epoch = epoch + time - pauseTime; self.pauseTime = nil }
+        else if epoch == nil { epoch = time + Double(score.beatsPerBar) * secondsPerBeat }
+        pending = []; pendingTime = nil
+    }
+    mutating func pause(at time: Double) {
+        guard epoch != nil, pauseTime == nil else { return }
+        pauseTime = time; pending = []; pendingTime = nil
+    }
+    func beat(at time: Double) -> Double { ((pauseTime ?? time) - (epoch ?? time)) / secondsPerBeat }
+    func expectedTime(_ index: Int) -> Double { (epoch ?? 0) + score.events[index].beat * secondsPerBeat }
+    mutating func tick(at time: Double) {
+        guard style == .rhythm, epoch != nil, pauseTime == nil, !finished else { return }
+        while position < score.events.count, time > expectedTime(position) + window {
+            if judgments[position] == nil { judgments[position] = EventJudgment(grade: .missed, error: nil, heard: []) }
+            position += 1; pending = []; pendingTime = nil
+        }
+        if position == score.events.count, time >= (epoch ?? time) + score.length * secondsPerBeat { finished = true }
+    }
+    @discardableResult mutating func play(_ notes: Set<Int>, at time: Double, groupingWindow: Double = 0.09) -> NoteGrade? {
+        guard !finished, pauseTime == nil, let epoch, !notes.isEmpty else { return nil }
+        if style == .rhythm { tick(at: time); if time < epoch - window { return nil } }
+        else if time < epoch { return nil }
+        guard position < score.events.count else { return nil }
+        let target = score.events[position].pitches(hands)
+        guard !target.isEmpty else { return nil }
+        let error = time - expectedTime(position)
+        if style == .rhythm && error < -window { return nil }
+        if let pendingTime, time - pendingTime > groupingWindow { pending = []; self.pendingTime = nil }
+        if pendingTime == nil { pendingTime = time }
+        pending.formUnion(notes)
+        if !pending.isSubset(of: target) {
+            if time - lastAttempt > 0.14 { mistakes += 1; lastAttempt = time }
+            pending = []; pendingTime = nil
+            return .wrong
+        }
+        guard pending == target else { return nil } // One hand alone never passes a two-hand event.
+        let onsetError = (pendingTime ?? time) - expectedTime(position)
+        let grade: NoteGrade = style == .follow || abs(onsetError) <= window * 0.3 ? .perfect : (onsetError < 0 ? .early : .late)
+        judgments[position] = EventJudgment(grade: grade, error: style == .rhythm ? onsetError : nil, heard: pending)
+        pending = []; pendingTime = nil
+        position += 1
+        if style == .follow { finished = position == score.events.count }
+        return grade
+    }
+}
+
+/// Byte-stream parser shared by all CoreMIDI packets for one source.
+/// Handles running status, realtime interleaving, sysex, note-off and velocity zero.
+struct MIDIByteParser {
+    private var status: UInt8 = 0
+    private var data: [UInt8] = []
+    private var sysex = false
+    mutating func feed(_ bytes: [UInt8]) -> [(note: Int, on: Bool)] {
+        var events: [(Int, Bool)] = []
+        for byte in bytes {
+            if byte >= 0xF8 { continue }
+            if byte == 0xF0 { sysex = true; status = 0; data = []; continue }
+            if byte == 0xF7 { sysex = false; continue }
+            if sysex { continue }
+            if byte & 0x80 != 0 { status = byte < 0xF0 ? byte : 0; data = []; continue }
+            guard status != 0 else { continue }
+            data.append(byte)
+            let length = (status & 0xF0 == 0xC0 || status & 0xF0 == 0xD0) ? 1 : 2
+            if data.count == length {
+                let command = status & 0xF0
+                if command == 0x90 || command == 0x80 { events.append((Int(data[0]), command == 0x90 && data[1] > 0)) }
+                data = []
+            }
+        }
+        return events
+    }
+}
