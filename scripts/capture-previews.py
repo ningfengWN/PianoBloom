@@ -7,6 +7,7 @@ def run(*args, timeout=60, check=True):
 output = pathlib.Path('build/previews'); output.mkdir(parents=True, exist_ok=True)
 data = json.loads(run('xcrun','simctl','list','devices','available','-j').stdout)
 devices = [d for ds in data['devices'].values() for d in ds]
+failures = []
 for family in ('iPad', 'iPhone'):
     device = next(d for d in devices if family in d['name'])
     uid = device['udid']
@@ -25,6 +26,13 @@ for family in ('iPad', 'iPhone'):
             assert hashlib.sha256(image_path.read_bytes()).digest() != hashlib.sha256((output/f'{family}-home.png').read_bytes()).digest(), 'Performance preview did not open'
         if name == 'performance-landscape':
             width, height = struct.unpack('>II', image_path.read_bytes()[16:24])
-            assert width > height, f'Landscape request failed: {width}x{height}'
+            if width <= height:
+                container = pathlib.Path(run('xcrun','simctl','get_app_container',uid,'com.pianobloom.app','data').stdout.strip())
+                diagnostic = container/'Documents/orientation-error.txt'
+                detail = diagnostic.read_text() if diagnostic.exists() else 'No UIKit error returned'
+                (output/'orientation-diagnostic.txt').write_text(detail)
+                failures.append(f'Landscape request failed: {width}x{height}; {detail}')
         print(f'Captured {family}: {name}', flush=True)
     run('xcrun','simctl','shutdown',uid)
+
+assert not failures, "\n".join(failures)

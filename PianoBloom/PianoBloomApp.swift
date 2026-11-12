@@ -3,9 +3,19 @@ import UIKit
 
 @main
 struct PianoBloomApp: App {
+    @UIApplicationDelegateAdaptor(PianoAppDelegate.self) private var appDelegate
     @StateObject private var model = PracticeModel()
     var body: some Scene {
         WindowGroup { GardenHome(model: model).preferredColorScheme(.light) }
+    }
+}
+
+final class PianoAppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--preview-landscape") { return .landscapeLeft }
+        #endif
+        return UIDevice.current.userInterfaceIdiom == .pad ? .all : .allButUpsideDown
     }
 }
 
@@ -229,7 +239,13 @@ struct PerformanceScreen: View {
             if ProcessInfo.processInfo.arguments.contains("--preview-landscape") {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                     let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
-                    scene?.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeLeft))
+                    var controller = scene?.windows.first(where: \.isKeyWindow)?.rootViewController
+                    controller?.setNeedsUpdateOfSupportedInterfaceOrientations()
+                    while let presented = controller?.presentedViewController { controller = presented; controller?.setNeedsUpdateOfSupportedInterfaceOrientations() }
+                    scene?.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeLeft)) { error in
+                        let folder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                        try? error.localizedDescription.write(to: folder.appendingPathComponent("orientation-error.txt"), atomically: true, encoding: .utf8)
+                    }
                 }
             }
             #endif
