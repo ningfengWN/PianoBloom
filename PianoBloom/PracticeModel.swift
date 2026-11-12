@@ -129,7 +129,7 @@ final class PracticeModel: ObservableObject {
     func restart() {
         pause()
         performance = Performance(score: currentScore, hands: hands, style: style, bpm: bpm)
-        elapsed = 0; recordingResult = false; latestResult = nil; showResult = false; lastGrade = nil
+        elapsed = 0; recordingResult = false; latestResult = nil; showResult = false; lastGrade = nil; lastVoiceTime = -Double.infinity
         feedback = style == .follow ? "跟着发光的音符，慢慢弹就好。" : "先数一小节，再跟着星星的节拍弹。"
     }
     func beginGuided() {
@@ -291,7 +291,7 @@ final class PracticeModel: ObservableObject {
         case .wrong: feedback = hands == .both ? "看看两只手，再试试发光的音符。" : "再看看发光的音符，小兔等你。"
         case .missed: break
         }
-        if grade == .wrong && style == .follow && voiceHints && time - lastVoiceTime > 3 {
+        if grade == .wrong && guided && style == .follow && voiceHints && time - lastVoiceTime > 3 {
             lastVoiceTime = time
             let notes = target.sorted().map(Music.name).joined(separator: "、")
             pause(); feedback = "请再试试 \(notes)，点击开始继续。"
