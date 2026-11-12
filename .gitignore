@@ -7,3 +7,7 @@ xcuserdata/
 *.ipa
 *.dSYM/
 *.xcarchive/
+
+# Python helper cache
+__pycache__/
+*.pyc

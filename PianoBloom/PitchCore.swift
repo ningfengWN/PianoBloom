@@ -18,7 +18,7 @@ enum PitchDetector {
         let rms = sqrt(x.reduce(0) { $0 + $1 * $1 } / Double(x.count))
         guard rms > 0.001 else { return PitchFrame(frequency: nil, rms: rms, time: time) }
         let count = x.count / 2
-        let maxLag = min(count - 2, Int(sampleRate / 115))
+        let maxLag = min(count - 2, Int(sampleRate / 55))
         let minLag = max(2, Int(sampleRate / 1600))
         guard maxLag > minLag + 2 else { return PitchFrame(frequency: nil, rms: rms, time: time) }
         var difference = [Double](repeating: 1, count: maxLag + 1)
@@ -37,7 +37,7 @@ enum PitchDetector {
                 let denominator = a - 2 * b + c
                 let offset = abs(denominator) > 1e-12 ? 0.5 * (a - c) / denominator : 0
                 let f = sampleRate / (Double(lag) + max(-1, min(1, offset)))
-                return PitchFrame(frequency: (120...1500).contains(f) ? f : nil, rms: rms, time: time)
+                return PitchFrame(frequency: (55...1500).contains(f) ? f : nil, rms: rms, time: time)
             }
             lag += 1
         }
@@ -126,14 +126,14 @@ struct NoteGate {
             return nil
         }
         quietSince = nil
-        if previousRMS > 0, frame.rms > max(threshold * 2, previousRMS * 1.65), frame.time - lastEvent > 0.22 {
+        if previousRMS > 0, frame.rms > max(threshold * 2, previousRMS * 1.65), frame.time - lastEvent > 0.10 {
             armed = true; candidate = nil
         }
         let pitch = Music.pitch(f, reference: reference)
         let midi = Int(pitch.rounded())
         guard abs(pitch - Double(midi)) <= 0.40 else { candidate = nil; return nil }
         if candidate != midi { candidate = midi; candidateSince = frame.time; return nil }
-        guard frame.time - candidateSince >= 0.055, frame.time - lastEvent >= 0.16 else { return nil }
+        guard frame.time - candidateSince >= 0.055, frame.time - lastEvent >= 0.08 else { return nil }
         guard armed || emitted != midi else { return nil }
         armed = false; emitted = midi; lastEvent = frame.time
         return midi

@@ -15,7 +15,7 @@ final class MIDIInput: ObservableObject {
     private var client = MIDIClientRef()
     private var port = MIDIPortRef()
     private var parser = MIDIByteParser()
-    private var generation = UUID()
+    private var openedAt = 0.0
     init() {
         let result = MIDIClientCreateWithBlock("PianoBloom" as CFString, &client) { [weak self] _ in
             DispatchQueue.main.async { self?.refresh() }
@@ -56,17 +56,17 @@ final class MIDIInput: ObservableObject {
     func start() {
         refresh()
         guard selected != 0, port != 0 else { return }
-        parser = MIDIByteParser(); active = []
+        parser = MIDIByteParser(); active = []; openedAt = ProcessInfo.processInfo.systemUptime
         let status = MIDIPortConnectSource(port, selected, nil)
         listening = status == noErr
         if !listening { message = "连接 MIDI 失败，请拔插后重试" }
     }
     func stop() {
         if listening { MIDIPortDisconnectSource(port, selected) }
-        listening = false; active = []; parser = MIDIByteParser(); generation = UUID()
+        listening = false; active = []; parser = MIDIByteParser()
     }
     private func receive(_ bytes: [UInt8], at time: Double) {
-        guard listening else { return }
+        guard listening, time >= openedAt - 0.02 else { return }
         for event in parser.feed(bytes) {
             if event.on { active.insert(event.note) } else { active.remove(event.note) }
             onNote?(event.note, event.on, time)

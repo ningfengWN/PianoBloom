@@ -188,7 +188,7 @@ private struct InputSelector: View {
                     }.font(.caption)
                 }
             } else {
-                Text(model.hands == .both ? "双手识音为测试功能，八度与踏板可能误判；正式评分推荐 USB MIDI。" : "在安静环境练习，先松开踏板；麦克风节奏分为估算。")
+                Text(model.hands == .both ? "双手识音为测试功能，建议先慢练（30–60 BPM）；正式评分推荐 USB MIDI。" : "在安静环境练习，先松开踏板；麦克风节奏分为估算。")
                     .font(.caption).foregroundStyle(Bloom.lilac)
             }
         }

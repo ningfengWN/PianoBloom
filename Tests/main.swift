@@ -10,7 +10,7 @@ func frame(_ midi: Int?, _ t: Double, rms: Double = 0.06) -> PitchFrame {
 }
 // Actual PCM is fed to the production detector, including overtones and detuning.
 for rate in [14700.0,16000.0,12000.0] {
-    for midi in [47,48,55,60,61,64,69,72,83,88] {
+    for midi in [35,36,47,48,55,60,61,64,69,72,83,88] {
         for detune in [0.0, 17.0] {
             let f = Music.frequency(midi) * pow(2, detune / 1200)
             var pcm: [Float] = []

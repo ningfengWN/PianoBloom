@@ -11,7 +11,7 @@ struct GrandStaffView: View {
                 LazyVStack(spacing: 12) {
                     ForEach(0..<lineCount, id: \.self) { row in
                         StaffSystem(score: model.performance.score, start: row * perLine, count: perLine,
-                                    performance: model.performance, hands: model.hands, beat: model.beat, running: model.running)
+                                    performance: model.performance, hands: model.hands, wrong: model.lastGrade == .wrong, beat: model.beat, running: model.running)
                             .frame(height: wide ? 256 : 236)
                             .id(row)
                             .accessibilityLabel("第 \(row + 1) 行双手琴谱")
@@ -34,6 +34,7 @@ private struct StaffSystem: View {
     let count: Int
     let performance: Performance
     let hands: PracticeHands
+    let wrong: Bool
     let beat: Double
     let running: Bool
     private let ink = Color(red: 0.30, green: 0.23, blue: 0.33)
@@ -41,7 +42,7 @@ private struct StaffSystem: View {
     private var end: Int { min(start + count, score.events.count) }
     var body: some View {
         Canvas { context, size in
-            let left: CGFloat = 58, right: CGFloat = size.width - 16
+            let left: CGFloat = 78, right: CGFloat = size.width - 16
             let topBottom: CGFloat = 88, lowBottom: CGFloat = 188, gap: CGFloat = 10
             let firstBeat = score.events[start].beat
             let last = score.events[end - 1]
@@ -53,6 +54,19 @@ private struct StaffSystem: View {
             func y(_ note: Int, lower: Bool) -> CGFloat {
                 if lower && !lowTreble { return lowBottom - CGFloat(Music.staffStep(note) + 10) * 5 }
                 return (lower ? lowBottom : topBottom) + 10 - CGFloat(Music.staffStep(note)) * 5
+            }
+            func stemGeometry(_ index: Int, lower: Bool) -> (x: CGFloat, head: CGFloat, end: CGFloat, up: Bool) {
+                let event = score.events[index]
+                let pitches = lower ? event.left : event.right
+                let group = (start..<end).filter { event.duration <= 0.5 && score.events[$0].duration <= 0.5 && floor(score.events[$0].beat) == floor(event.beat) }
+                let groupYs = (group.isEmpty ? [index] : group).flatMap { lower ? score.events[$0].left : score.events[$0].right }.map { y($0, lower: lower) }
+                let bottom = lower ? lowBottom : topBottom
+                let average = groupYs.reduce(0, +) / CGFloat(max(1, groupYs.count))
+                let up = average >= bottom - 20
+                let ownYs = pitches.map { y($0, lower: lower) }
+                return (x(event.beat) + (up ? 5 : -5),
+                        up ? (ownYs.max() ?? bottom) : (ownYs.min() ?? bottom),
+                        up ? (groupYs.min() ?? bottom) - 25 : (groupYs.max() ?? bottom) + 25, up)
             }
             func text(_ string: String, _ point: CGPoint, _ font: Font, _ color: Color, anchor: UnitPoint = .center) {
                 context.draw(Text(string).font(font).foregroundColor(color), at: point, anchor: anchor)
@@ -73,6 +87,10 @@ private struct StaffSystem: View {
                 context.stroke(staff, with: .color(ink.opacity(0.28 * opacity)), lineWidth: 0.8)
                 text(lower && !lowTreble ? "𝄢" : "𝄞", CGPoint(x: 40, y: bottom - 20), .system(size: lower && !lowTreble ? 32 : 46), ink.opacity(opacity))
                 text(lower ? "左手" : "右手", CGPoint(x: 4, y: bottom - 20), .system(size: 9, weight: .medium), pink.opacity(opacity), anchor: .leading)
+                if start == 0 {
+                    text("\(score.beatsPerBar)", CGPoint(x: 61, y: bottom - 29), .system(size: 17, weight: .bold, design: .serif), ink.opacity(opacity))
+                    text("4", CGPoint(x: 61, y: bottom - 12), .system(size: 17, weight: .bold, design: .serif), ink.opacity(opacity))
+                }
                 // A brace joins the grand staff. Original cross-staff notes retain their hand identity.
                 if !lower {
                     var join = Path(); join.move(to: CGPoint(x: 24, y: topBottom - 40)); join.addLine(to: CGPoint(x: 24, y: lowBottom))
@@ -89,7 +107,7 @@ private struct StaffSystem: View {
                     case .perfect?: color = Color(red: 0.19, green: 0.64, blue: 0.50)
                     case .early?, .late?: color = Color(red: 0.69, green: 0.48, blue: 0.81)
                     case .missed?, .wrong?: color = .orange
-                    case nil: color = current ? pink : ink
+                    case nil: color = current ? (wrong ? .orange : pink) : ink
                     }
                     let paint = color.opacity(opacity)
                     if Int((event.beat * 100).rounded()) % (score.beatsPerBar * 100) == 0 {
@@ -120,10 +138,8 @@ private struct StaffSystem: View {
                         else { context.fill(head, with: .color(paint)) }
                     }
                     // Beams are grouped by beat (never across barlines); half and quarter notes retain their stems.
-                    let stemY = y(notes[0], lower: lower)
-                    let up = stemY >= bottom - 20
-                    let stemX = centerX + (up ? 5 : -5)
-                    let stemEnd = stemY + (up ? -25 : 25)
+                    let stem = stemGeometry(index, lower: lower)
+                    let stemY = stem.head, up = stem.up, stemX = stem.x, stemEnd = stem.end
                     if event.duration < 4 {
                         var stem = Path(); stem.move(to: CGPoint(x: stemX, y: stemY)); stem.addLine(to: CGPoint(x: stemX, y: stemEnd))
                         context.stroke(stem, with: .color(paint), lineWidth: 1.2)
@@ -136,10 +152,9 @@ private struct StaffSystem: View {
                             let next = score.events[nextIndex]
                             let nextNotes = lower ? next.left : next.right
                             if let nextNote = nextNotes.first {
-                                let nextY = y(nextNote, lower: lower)
-                                let nextUp = nextY >= bottom - 20
-                                let nextX = x(next.beat) + (nextUp ? 5 : -5)
-                                let nextEnd = nextY + (nextUp ? -25 : 25)
+                                _ = nextNote
+                                let nextStem = stemGeometry(nextIndex, lower: lower)
+                                let nextX = nextStem.x, nextEnd = nextStem.end
                                 for beam in 0..<(event.duration <= 0.25 ? 2 : 1) {
                                     let shift = CGFloat(beam) * (up ? 5 : -5)
                                     var path = Path(); path.move(to: CGPoint(x: stemX, y: stemEnd + shift)); path.addLine(to: CGPoint(x: nextX, y: nextEnd + shift))
