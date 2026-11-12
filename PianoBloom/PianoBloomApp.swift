@@ -295,7 +295,7 @@ struct PerformanceScreen: View {
     }
     private func scoreTitle(wide: Bool) -> some View {
         HStack(spacing: 10) {
-            Text(model.guided ? model.guidedRange : model.sectionBar.map { "第 \($0 + 1) 小节起" } ?? "完整曲谱")
+            Text(model.guided ? "整曲 · " + model.guidedRange : "完整曲谱")
                 .font(.caption.bold()).foregroundStyle(Bloom.lilac)
                 .padding(.horizontal, 10).padding(.vertical, 5)
                 .background(Bloom.blush, in: Capsule())
@@ -524,7 +524,7 @@ private struct ParentSettings: View {
                     Text("曲谱与所有音频分析均在设备运行，不保存录音、不上传声音。")
                 }
                 Section("琴谱与署名") {
-                    Text("PianoBloom 2.3 · 大谱面练琴")
+                    Text("PianoBloom 2.4 · 整曲花朵琴谱")
                     Text("哈农 1–20：Steve Taylor / Javier Ruiz-Alma，Mutopia，CC BY-SA 4.0。保留双手、时值，展开原谱反复。启蒙双手曲为本 App 教学改编。")
                     Link("查看曲谱来源", destination: URL(string: "https://www.mutopiaproject.org/ftp/HanonCL/virtuoso-pianist-pt1/")!)
                 }

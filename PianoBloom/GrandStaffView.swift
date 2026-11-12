@@ -3,55 +3,93 @@ import SwiftUI
 struct GrandStaffView: View {
     @ObservedObject var model: PracticeModel
     let wide: Bool
-    @State private var bloomVisible = false
-    @State private var bloomTask: Task<Void, Never>?
+    @State private var pops: [PlayedNotePop] = []
     private var perLine: Int { wide ? (model.score.isHanon && model.notationScale < 1.5 ? 16 : 8) : 4 }
-    private var lineCount: Int { (model.performance.score.events.count + perLine - 1) / perLine }
+    private var lineCount: Int { (model.score.events.count + perLine - 1) / perLine }
     var body: some View {
         ScrollViewReader { proxy in
-            ScrollView(.vertical, showsIndicators: false) {
+            ScrollView(.vertical, showsIndicators: true) {
                 LazyVStack(spacing: 12) {
                     ForEach(0..<lineCount, id: \.self) { row in
-                        StaffSystem(score: model.performance.score, start: row * perLine, count: perLine,
-                                    performance: model.performance, position: model.visualPosition, notationScale: model.notationScale, hands: model.hands, beat: model.visualBeat, running: model.running || model.demonstrating)
+                        StaffSystem(score: model.score, start: row * perLine, count: perLine,
+                                    judgments: model.displayMap.judgments(model.performance.judgments),
+                                    mistakePositions: model.displayMap.positions(model.performance.mistakePositions),
+                                    style: model.style, position: model.notationPosition,
+                                    notationScale: model.notationScale, hands: model.hands,
+                                    beat: model.notationBeat, running: model.running || model.demonstrating,
+                                    pops: pops.filter { $0.index / perLine == row },
+                                    popCompleted: { id in pops.removeAll { $0.id == id } })
                             .frame(height: 236 * model.notationScale)
                             .id(row)
-                            .accessibilityLabel("第 \(row + 1) 行双手琴谱")
+                            .accessibilityLabel("第 \(row + 1) 行双手琴谱，可上下滑动查看整曲")
                     }
                 }.padding(.horizontal, wide ? 28 : 8).padding(.vertical, 12)
             }
-            .onChange(of: model.visualPosition / perLine) { row in
-                withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(min(lineCount - 1, row), anchor: .top) }
+            .onAppear { proxy.scrollTo(model.notationFocus / perLine, anchor: .top) }
+            .onChange(of: model.notationFocus / perLine) { row in
+                guard model.running || model.demonstrating else { return }
+                withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(row, anchor: .top) }
             }
             .onChange(of: model.performance.epoch) { _ in
-                if model.performance.position == 0 { proxy.scrollTo(0, anchor: .top) }
-            }
-        }
-        .overlay(alignment: .topTrailing) {
-            if bloomVisible {
-                HStack(spacing: 5) {
-                    Text("✿").font(.system(size: 25))
-                    Text(model.lastGrade == .wrong ? "记下啦" : "小花开啦").font(.caption.bold())
+                if model.performance.position == 0 {
+                    pops = []
+                    proxy.scrollTo(model.notationFocus / perLine, anchor: .top)
                 }
-                .foregroundStyle(model.lastGrade == .wrong ? Color.pink : Color(red: 0.19, green: 0.64, blue: 0.50))
-                .padding(.horizontal, 12).padding(.vertical, 6)
-                .background(.white, in: Capsule()).shadow(color: .pink.opacity(0.12), radius: 6, y: 2)
-                .padding(12).transition(.scale(scale: 0.5).combined(with: .opacity))
-                .accessibilityHidden(true).allowsHitTesting(false)
+            }
+            .onChange(of: model.sectionBar) { _ in
+                pops = []
+                proxy.scrollTo(model.notationFocus / perLine, anchor: .top)
             }
         }
         .onChange(of: model.performance.position) { position in
             guard !model.demonstrating, position > 0,
-                  let judgment = model.performance.judgments[position - 1], judgment.grade != .missed else { return }
-            bloomTask?.cancel()
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.65)) { bloomVisible = true }
-            bloomTask = Task { @MainActor in
+                  let judgment = model.performance.judgments[position - 1], judgment.grade != .missed,
+                  let index = model.displayMap.globalIndex(position - 1) else { return }
+            let pop = PlayedNotePop(index: index, wrong: judgment.grade == .wrong)
+            pops.append(pop)
+            // Keep quick passages bounded without cancelling other notes' animations.
+            pops = Array(pops.suffix(12))
+            Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 650_000_000)
-                guard !Task.isCancelled else { return }
-                withAnimation(.easeOut(duration: 0.2)) { bloomVisible = false }
+                pops.removeAll { $0.id == pop.id }
             }
         }
-        .onDisappear { bloomTask?.cancel(); bloomVisible = false }
+        .onDisappear { pops = [] }
+    }
+}
+
+private struct PlayedNotePop: Identifiable {
+    let id = UUID()
+    let index: Int
+    let wrong: Bool
+}
+
+private struct NotePopView: View {
+    let wrong: Bool
+    let completed: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var expanded = false
+    @State private var faded = false
+    var body: some View {
+        ZStack {
+            Image(systemName: "sparkles").font(.system(size: 34)).rotationEffect(.degrees(-12))
+                .foregroundStyle((wrong ? Color.pink : Bloom.mint).opacity(0.5))
+            Text(wrong ? "✿" : "🌸").font(.system(size: 27))
+        }
+        .scaleEffect(reduceMotion ? 1 : (expanded ? 1.25 : 0.25))
+        .offset(y: reduceMotion ? 0 : (faded ? -36 : expanded ? -12 : 4))
+        .opacity(faded ? 0 : 1)
+        .accessibilityHidden(true).allowsHitTesting(false)
+        .onDisappear(perform: completed)
+        .task {
+            withAnimation(reduceMotion ? nil : .spring(response: 0.22, dampingFraction: 0.48)) { expanded = true }
+            try? await Task.sleep(nanoseconds: 220_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.32)) { faded = true }
+            try? await Task.sleep(nanoseconds: 330_000_000)
+            guard !Task.isCancelled else { return }
+            completed()
+        }
     }
 }
 
@@ -59,12 +97,16 @@ private struct StaffSystem: View {
     let score: PianoScore
     let start: Int
     let count: Int
-    let performance: Performance
+    let judgments: [Int: EventJudgment]
+    let mistakePositions: Set<Int>
+    let style: PlayStyle
     let position: Int
     let notationScale: Double
     let hands: PracticeHands
     let beat: Double
     let running: Bool
+    let pops: [PlayedNotePop]
+    let popCompleted: (UUID) -> Void
     private let ink = Color(red: 0.15, green: 0.11, blue: 0.17)
     private let pink = Color(red: 0.88, green: 0.31, blue: 0.53)
     private var end: Int { min(start + count, score.events.count) }
@@ -102,7 +144,7 @@ private struct StaffSystem: View {
             func text(_ string: String, _ point: CGPoint, _ font: Font, _ color: Color, anchor: UnitPoint = .center) {
                 context.draw(Text(string).font(font).foregroundColor(color), at: point, anchor: anchor)
             }
-            let weakIndices = performance.mistakePositions.union(performance.judgments.filter { $0.value.grade != .perfect }.map(\.key))
+            let weakIndices = mistakePositions.union(judgments.filter { $0.value.grade != .perfect }.map(\.key))
             let weakBars = Set(weakIndices.filter { $0 < score.events.count }.map { Int(score.events[$0].beat) / score.beatsPerBar })
             for bar in weakBars {
                 let from = max(firstBeat, Double(bar * score.beatsPerBar))
@@ -143,7 +185,7 @@ private struct StaffSystem: View {
                     let event = score.events[index]
                     let notes = lower ? event.left : event.right
                     let centerX = x(event.beat)
-                    let judgment = enabled ? performance.judgments[index] : nil
+                    let judgment = enabled ? judgments[index] : nil
                     let current = index == position
                     let color: Color
                     switch judgment?.grade {
@@ -248,13 +290,34 @@ private struct StaffSystem: View {
                     text(label, CGPoint(x: labelX, y: 129), .system(size: 10, weight: .bold, design: .rounded), .white)
                 }
             }
-            if running && performance.style == .rhythm && beat >= firstBeat && beat < endBeat {
+            if running && style == .rhythm && beat >= firstBeat && beat < endBeat {
                 let cursor = x(beat)
                 var line = Path(); line.move(to: CGPoint(x: cursor, y: 12)); line.addLine(to: CGPoint(x: cursor, y: 218))
                 context.stroke(line, with: .color(pink.opacity(0.65)), lineWidth: 1.5)
                 text("✦", CGPoint(x: cursor, y: 14), .system(size: 18), pink)
             }
         }
+        .overlay {
+            GeometryReader { geometry in
+                ForEach(pops) { pop in
+                    let point = popPoint(pop.index, width: geometry.size.width)
+                    NotePopView(wrong: pop.wrong) { popCompleted(pop.id) }
+                        .position(point)
+                }
+            }.allowsHitTesting(false)
+        }
         .background(.white, in: RoundedRectangle(cornerRadius: 20))
     }
+    private func popPoint(_ index: Int, width: CGFloat) -> CGPoint {
+        let scale = CGFloat(notationScale)
+        let left: CGFloat = 78, right = width / scale - 16
+        let first = score.events[start].beat
+        let last = score.events[end - 1]
+        let beatWidth = (right - left) / CGFloat(max(1, last.beat + last.duration - first))
+        let event = score.events[index]
+        let x = left + CGFloat(event.beat - first) * beatWidth + min(12, beatWidth * 0.08)
+        // Same anchor as the permanent blossom; the popup rises into the row's top margin.
+        return CGPoint(x: x * scale, y: 28 * scale)
+    }
+
 }

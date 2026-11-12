@@ -48,6 +48,10 @@ final class PracticeModel: ObservableObject {
     private var demoScore: PianoScore?
     var visualPosition: Int { demonstrating ? demoPosition : performance.position }
     var visualBeat: Double { demonstrating ? demoBeat : beat }
+    var displayMap: ScoreDisplayMap { ScoreDisplayMap(score: score, sectionBar: sectionBar) }
+    var notationPosition: Int { displayMap.globalIndex(visualPosition) ?? score.events.count }
+    var notationFocus: Int { displayMap.globalIndex(min(visualPosition, max(0, performance.score.events.count - 1))) ?? 0 }
+    var notationBeat: Double { visualBeat + displayMap.beatOffset }
     var phraseCount: Int { max(1, Int(ceil(score.length / Double(score.beatsPerBar * 2)))) }
     var guidedTitle: String { journey.wholeSong ? (journey.stage == .concert ? "整曲演奏" : "整曲 · \(journey.stage.title)") : journey.stage.title }
     var guidedRange: String { journey.wholeSong ? "完整曲谱" : "第 \(journey.phrase * 2 + 1)–\(min(journey.phrase * 2 + 2, Int(ceil(score.length / Double(score.beatsPerBar))))) 小节" }

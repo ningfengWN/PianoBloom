@@ -51,6 +51,27 @@ struct PianoScore: Identifiable {
     }
 }
 
+/// Maps a practiced two-bar excerpt onto the complete, scrollable score.
+/// Judgments remain local to the attempt; rendering never changes scoring scope.
+struct ScoreDisplayMap {
+    let indices: [Int]
+    let beatOffset: Double
+    init(score: PianoScore, sectionBar: Int?) {
+        let offset = Double(sectionBar ?? 0) * Double(score.beatsPerBar)
+        beatOffset = offset
+        indices = score.events.indices.filter { index in
+            sectionBar == nil || (score.events[index].beat >= offset && score.events[index].beat < offset + Double(score.beatsPerBar * 2))
+        }
+    }
+    func globalIndex(_ localIndex: Int) -> Int? {
+        indices.indices.contains(localIndex) ? indices[localIndex] : nil
+    }
+    func judgments(_ local: [Int: EventJudgment]) -> [Int: EventJudgment] {
+        Dictionary(uniqueKeysWithValues: local.compactMap { index, value in globalIndex(index).map { ($0, value) } })
+    }
+    func positions(_ local: Set<Int>) -> Set<Int> { Set(local.compactMap(globalIndex)) }
+}
+
 enum NoteGrade: String { case perfect, early, late, wrong, missed }
 struct EventJudgment {
     let grade: NoteGrade

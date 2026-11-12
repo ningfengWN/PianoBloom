@@ -233,4 +233,17 @@ check(selectableJourney.stage == .right, "can go backwards to right hand")
 selectableJourney.wholeSong = true
 selectableJourney.chooseHand(.left)
 check(selectableJourney.wholeSong, "hand change preserves full-song scope")
+// A complete score stays visible while local excerpt judgments map to their original notes.
+let displayScore = PianoScore.starters[0]
+let entireMap = ScoreDisplayMap(score: displayScore, sectionBar: nil)
+check(entireMap.indices.count == displayScore.events.count && entireMap.globalIndex(0) == 0, "whole score mapping preserves every event")
+let excerptMap = ScoreDisplayMap(score: displayScore, sectionBar: 2)
+let excerptScore = displayScore.excerpt(2)
+check(excerptMap.indices.count == excerptScore.events.count && excerptMap.beatOffset == 8, "excerpt mapping matches scored range")
+check(excerptMap.globalIndex(0).map { displayScore.events[$0].beat } == 8, "later phrase starts on original score beat")
+check(excerptMap.globalIndex(excerptScore.events.count) == nil, "finished excerpt never highlights next unplayed phrase")
+let mappedJudgments = excerptMap.judgments([0: EventJudgment(grade: .perfect, error: nil, heard: [60])])
+check(mappedJudgments[excerptMap.indices[0]]?.grade == .perfect && mappedJudgments[0] == nil, "played flower appears on global note, not first row")
+check(excerptMap.positions([0]) == [excerptMap.indices[0]], "mistake review aligns with the complete score")
+check(ScoreDisplayMap(score: displayScore, sectionBar: 999).indices.isEmpty, "out of range excerpt safely maps no notes")
 print("PASS: \(checks) production core checks")
