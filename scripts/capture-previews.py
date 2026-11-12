@@ -30,7 +30,7 @@ for family in (('iPad', 'iPhone') if options.family == 'all' else [options.famil
     run('xcrun','simctl','boot',uid,check=False)
     run('xcrun','simctl','bootstatus',uid,'-b',timeout=110)
     run('xcrun','simctl','install',uid,'build/Build/Products/Debug-iphonesimulator/PianoBloom.app')
-    for name, args in [('home', []), ('performance-portrait', ['--preview-performance']), ('guided', ['--preview-performance','--preview-guided'])] + ([('performance-landscape',['--preview-performance','--preview-landscape'])] if family == 'iPad' and not options.skip_landscape else []):
+    for name, args in [('home', []), ('performance-portrait', ['--preview-performance']), ('guided', ['--preview-performance','--preview-guided']), ('played', ['--preview-performance','--preview-played'])] + ([('performance-landscape',['--preview-performance','--preview-landscape'])] if family == 'iPad' and not options.skip_landscape else []):
         run('xcrun','simctl','terminate',uid,'com.pianobloom.app',check=False)
         run('xcrun','simctl','launch',uid,'com.pianobloom.app',*args)
         time.sleep(4)

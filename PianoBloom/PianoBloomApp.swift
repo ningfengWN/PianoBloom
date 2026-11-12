@@ -107,7 +107,7 @@ struct GardenHome: View {
                 Picker("练习方式", selection: Binding(get: { model.style }, set: { model.configure(style: $0) })) {
                     ForEach(PlayStyle.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                 }.pickerStyle(.segmented)
-                Text(model.style == .follow ? "弹对再向前，小兔会等你。" : "按固定节拍演奏，结束后看看节奏星星。")
+                Text(model.style == .follow ? "跟着音符慢慢弹，错音会记下并继续。" : "按固定节拍演奏，结束后看看节奏星星。")
                     .font(.caption).foregroundStyle(Bloom.lilac)
             }
             HStack {
@@ -216,7 +216,7 @@ private struct InputSelector: View {
 
 struct PerformanceScreen: View {
     @ObservedObject var model: PracticeModel
-    @State private var showKeyboard = false
+    @State private var showKeyboard = true
     @State private var showReview = false
     @State private var showScoreSettings = false
     @ObservedObject private var microphone: Microphone
@@ -229,6 +229,7 @@ struct PerformanceScreen: View {
             let short = geometry.size.height < 500
             VStack(spacing: short ? 8 : 14) {
                 header(wide: wide)
+                handSelector
                 if !short {
                     if model.guided { guidedStrip }
                     sessionStrip(wide: wide)
@@ -240,7 +241,7 @@ struct PerformanceScreen: View {
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(.white, in: RoundedRectangle(cornerRadius: 26))
                     .overlay(RoundedRectangle(cornerRadius: 26).stroke(Bloom.pink.opacity(0.08), lineWidth: 1))
-                if !short && (showKeyboard || model.demonstrating) { PerformanceKeyboard(heard: model.heard, target: model.target).frame(height: 88) }
+                if showKeyboard || model.demonstrating { PerformanceKeyboard(heard: model.heard, target: model.target).frame(height: short ? 48 : 88) }
                 controls(wide: wide)
             }.padding(.horizontal, wide ? 28 : 12).padding(.top, short ? 4 : 16).padding(.bottom, 8)
                 .background(Bloom.blush)
@@ -273,10 +274,14 @@ struct PerformanceScreen: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(Array(GuidedStage.allCases.dropLast().enumerated()), id: \.offset) { index, stage in
-                        Text("\(index + 1) \(stage.title)").font(.caption.bold()).padding(.horizontal, 12).padding(.vertical, 8)
-                            .foregroundStyle(model.journey.stage == stage ? .white : Bloom.lilac)
-                            .background(model.journey.stage == stage ? Bloom.pink : .white, in: Capsule())
-                            .id(stage.rawValue)
+                        if stage == .right || stage == .left || stage == .both {
+                            Button { model.selectHandsDuringPractice(stage.hands) } label: {
+                                stepLabel(index: index, stage: stage)
+                            }.buttonStyle(.plain).id(stage.rawValue)
+                                .accessibilityHint("从当前小段开头重新练习，可直接切换")
+                        } else {
+                            stepLabel(index: index, stage: stage).id(stage.rawValue)
+                        }
                     }
                 }
             }
@@ -286,14 +291,26 @@ struct PerformanceScreen: View {
             }
         }
     }
+    private var handSelector: some View {
+        Picker("选择演奏手", selection: Binding(get: { model.hands }, set: { model.selectHandsDuringPractice($0) })) {
+            ForEach([PracticeHands.left, .right, .both], id: \.self) { hand in Text(hand.rawValue).tag(hand) }
+        }.pickerStyle(.segmented)
+            .accessibilityHint("切换后从当前小段开头继续，正在收音时会自动恢复")
+    }
+    private func stepLabel(index: Int, stage: GuidedStage) -> some View {
+        Text("\(index + 1) \(stage.title)").font(.caption.bold()).padding(.horizontal, 12).padding(.vertical, 8)
+            .foregroundStyle(model.journey.stage == stage ? .white : Bloom.lilac)
+            .background(model.journey.stage == stage ? Bloom.pink : .white, in: Capsule())
+    }
     private var scoreSettings: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("看得更清楚").font(.headline)
             Text("琴谱大小 \(Int(model.notationScale * 100))% ").font(.subheadline)
             Slider(value: $model.notationScale, in: 1...1.7, step: 0.05).accessibilityLabel("五线谱大小")
+            Toggle("显示琴键", isOn: $showKeyboard)
             Toggle("小兔语音提示", isOn: $model.voiceHints)
             Button("音符颜色说明") { showScoreSettings = false; showReview = true }
-            Text("绿：正确；红：错音；灰：漏弹；红色影子：偏早或偏晚；粉框：需要复习的小节。")
+            Text("小花标记表示已弹过：绿色为正确，粉红色为错音；灰色表示漏弹。错音自动记下并继续，不会暂停收音。")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -506,12 +523,12 @@ private struct ParentSettings: View {
                 Section("给家长的话") {
                     Text("USB MIDI 可以直接读到两只手按下的琴键，是双手与节奏评分的推荐方式。")
                     Text("真钢琴麦克风双手识别仍在测试中，无法保证区分八度音和泛音；请关闭踏板、保持安静，并把麦克风结果作为参考。")
-                    Text("跟谱练习会等孩子弹对；节奏挑战在一小节预备后按固定速度前进，漏弹不会暂停谱面。节奏分仅评价起音时间，不评价力度、指法或松键时长。")
+                    Text("跟谱练习按弹奏的顺序前进，弹错也会记下并自动继续。节奏挑战按固定速度前进，漏弹不会暂停谱面。切换手型会从当前小段重新计分，并在原先正在收音时自动恢复。")
                     Text("哈农速度以四分音符为一拍；例如 60 BPM 下十六分音符间隔 250 毫秒。")
                     Text("曲谱与所有音频分析均在设备运行，不保存录音、不上传声音。")
                 }
                 Section("琴谱与署名") {
-                    Text("PianoBloom 2.1 · 小兔带练")
+                    Text("PianoBloom 2.2 · 连续练琴")
                     Text("哈农 1–20：Steve Taylor / Javier Ruiz-Alma，Mutopia，CC BY-SA 4.0。保留双手、时值，展开原谱反复。启蒙双手曲为本 App 教学改编。")
                     Link("查看曲谱来源", destination: URL(string: "https://www.mutopiaproject.org/ftp/HanonCL/virtuoso-pianist-pt1/")!)
                 }
@@ -575,12 +592,12 @@ private struct PracticeLegend: View {
     var body: some View {
         NavigationStack {
             List {
-                Label("绿色音符：弹对了", systemImage: "music.note").foregroundStyle(Bloom.mint)
-                Label("红色音符：当前音需要重试", systemImage: "music.note").foregroundStyle(.red)
+                Label("绿色音符和小花：弹对且已经弹过", systemImage: "music.note").foregroundStyle(Bloom.mint)
+                Label("红色音符和粉色小花：已记下错音，自动继续", systemImage: "music.note").foregroundStyle(.red)
                 Label("灰色音符：这一拍漏弹了", systemImage: "music.note").foregroundStyle(.gray)
                 Label("红色影子在前：弹早了；在后：弹晚了", systemImage: "metronome").foregroundStyle(Bloom.lilac)
                 Label("粉色框：本次需要复习的小节", systemImage: "rectangle.dashed").foregroundStyle(Bloom.pink)
-                Text("示范是本机生成的音符声音和同步键盘，不是教师真人视频。示范和语音播放时麦克风暂停，避免把 App 自己的声音当作弹奏。")
+                Text("示范是本机生成的音符声音和同步键盘。阶段讲解和手动示范会暂停收音；弹奏中的错音只用画面提示，不再播放语音或要求点击开始。")
                 Text("带练流程：两小节右手 → 左手 → 双手 → 节奏挑战 → 演奏；完成全部小段后进入整曲演奏。")
                 Text("双手达到 70 分或完成 3 遍进入节奏挑战；挑战与演奏要求音符、节奏均达到 90 分，或完成 3 遍。麦克风成绩仍为估算。")
             }.navigationTitle("小兔练琴说明").toolbar { ToolbarItem(placement: .confirmationAction) { Button("明白啦") { dismiss() } } }

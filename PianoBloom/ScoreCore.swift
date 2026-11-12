@@ -74,7 +74,7 @@ struct Performance {
     private(set) var finished = false
     private var pending: Set<Int> = []
     private var pendingTime: Double?
-    private var lastAttempt = -Double.infinity
+    private var suppressUntil = -Double.infinity
     var secondsPerBeat: Double { 60 / bpm }
     // At slow tempos a sixteenth note still has its own nonoverlapping window.
     var window: Double {
@@ -84,7 +84,7 @@ struct Performance {
     var correctCount: Int { judgments.values.filter { $0.grade != .wrong && $0.grade != .missed }.count }
     var missedCount: Int { judgments.values.filter { $0.grade == .missed }.count }
     var pitchScore: Int {
-        let denominator = finished ? score.events.count + mistakes : judgments.count + mistakes
+        let denominator = finished ? score.events.count : judgments.count
         return Int((100 * Double(correctCount) / Double(max(1, denominator))).rounded())
     }
     var rhythmScore: Int? {
@@ -102,7 +102,7 @@ struct Performance {
     mutating func start(at time: Double) {
         if let pauseTime, let epoch { self.epoch = epoch + time - pauseTime; self.pauseTime = nil }
         else if epoch == nil { epoch = time + Double(score.beatsPerBar) * secondsPerBeat }
-        pending = []; pendingTime = nil
+        pending = []; pendingTime = nil; suppressUntil = -Double.infinity
     }
     mutating func pause(at time: Double) {
         guard epoch != nil, pauseTime == nil else { return }
@@ -122,7 +122,7 @@ struct Performance {
         guard !finished, pauseTime == nil, let epoch, !notes.isEmpty else { return nil }
         if style == .rhythm { tick(at: time); if time < epoch - window { return nil } }
         else if time < epoch { return nil }
-        guard position < score.events.count else { return nil }
+        guard position < score.events.count, time >= suppressUntil else { return nil }
         let target = score.events[position].pitches(hands)
         guard !target.isEmpty else { return nil }
         let error = time - expectedTime(position)
@@ -132,8 +132,13 @@ struct Performance {
         pending.formUnion(notes)
         if !pending.isSubset(of: target) {
             mistakePositions.insert(position)
-            if time - lastAttempt > 0.14 { mistakes += 1; lastAttempt = time }
+            mistakes += 1
+            judgments[position] = EventJudgment(grade: .wrong, error: style == .rhythm ? error : nil, heard: pending)
             pending = []; pendingTime = nil
+            // The other note-on packets from this same mistaken chord must not consume the next event.
+            suppressUntil = time + max(0, min(groupingWindow, window))
+            position += 1
+            if style == .follow { finished = position == score.events.count }
             return .wrong
         }
         guard pending == target else { return nil } // One hand alone never passes a two-hand event.
@@ -206,6 +211,10 @@ struct GuidedJourney: Codable, Equatable {
     var attempts = 0
     var wholeSong = false
     var complete: Bool { stage == .finished }
+    mutating func chooseHand(_ hands: PracticeHands) {
+        stage = hands == .right ? .right : hands == .left ? .left : .both
+        attempts = 0
+    }
     mutating func record(pitch: Int, rhythm: Int?, phraseCount: Int) {
         guard !complete else { return }
         attempts += 1

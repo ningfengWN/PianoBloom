@@ -46,11 +46,10 @@ final class PracticeModel: ObservableObject {
     private let demonstrator = PianoDemonstrator()
     private var demoTimer: Timer?
     private var demoScore: PianoScore?
-    private var lastVoiceTime = -Double.infinity
     var visualPosition: Int { demonstrating ? demoPosition : performance.position }
     var visualBeat: Double { demonstrating ? demoBeat : beat }
     var phraseCount: Int { max(1, Int(ceil(score.length / Double(score.beatsPerBar * 2)))) }
-    var guidedTitle: String { journey.wholeSong ? "整曲演奏" : journey.stage.title }
+    var guidedTitle: String { journey.wholeSong ? (journey.stage == .concert ? "整曲演奏" : "整曲 · \(journey.stage.title)") : journey.stage.title }
     var guidedRange: String { journey.wholeSong ? "完整曲谱" : "第 \(journey.phrase * 2 + 1)–\(min(journey.phrase * 2 + 2, Int(ceil(score.length / Double(score.beatsPerBar))))) 小节" }
     var weakBars: [Int] {
         let positions = performance.mistakePositions.union(performance.judgments.filter { $0.value.grade != .perfect }.map(\.key))
@@ -110,6 +109,16 @@ final class PracticeModel: ObservableObject {
     func prepareScreenshot() {
         select(HanonScores.all[0])
         if ProcessInfo.processInfo.arguments.contains("--preview-guided") { beginGuided(); return }
+        if ProcessInfo.processInfo.arguments.contains("--preview-played") {
+            let start = ProcessInfo.processInfo.systemUptime - 4
+            performance.start(at: start)
+            for (index, event) in performance.score.events.prefix(6).enumerated() {
+                _ = performance.play(event.pitches(hands), at: start + Double(score.beatsPerBar) * 60 / bpm + Double(index) * 0.3)
+            }
+            now = ProcessInfo.processInfo.systemUptime; performance.pause(at: now)
+            lastGrade = .perfect; feedback = "界面预览 · 绿色小花为测试音符示例"
+            return
+        }
         performance.start(at: ProcessInfo.processInfo.systemUptime)
         performance.pause(at: ProcessInfo.processInfo.systemUptime)
     }
@@ -125,11 +134,29 @@ final class PracticeModel: ObservableObject {
         if let bpm { self.bpm = min(120, max(30, bpm)) }
         restart()
     }
+    /// A hand change starts a fresh attempt of the same excerpt; it never mixes scores across hands.
+    /// If input was active, reconnect it automatically with the new mono/polyphonic analysis mode.
+    func selectHandsDuringPractice(_ selection: PracticeHands) {
+        let targetStage: GuidedStage = selection == .right ? .right : selection == .left ? .left : .both
+        guard selection != hands || (guided && journey.stage != targetStage) else { return }
+        let resume = running || microphone.requesting
+        let replayDemo = demonstrating
+        pause()
+        hands = selection
+        if guided {
+            journey.chooseHand(selection); style = .follow
+            completedJourney = nil; saveJourney()
+        }
+        restart()
+        feedback = "已切换到\(selection.rawValue)，从这一段开头继续。"
+        if resume { toggle() }
+        else if replayDemo { demonstrate() }
+    }
     func selectSection(_ bar: Int?) { sectionBar = bar; restart() }
     func restart() {
         pause()
         performance = Performance(score: currentScore, hands: hands, style: style, bpm: bpm)
-        elapsed = 0; recordingResult = false; latestResult = nil; showResult = false; lastGrade = nil; lastVoiceTime = -Double.infinity
+        elapsed = 0; recordingResult = false; latestResult = nil; showResult = false; lastGrade = nil
         feedback = style == .follow ? "跟着发光的音符，慢慢弹就好。" : "先数一小节，再跟着星星的节拍弹。"
     }
     func beginGuided() {
@@ -288,14 +315,8 @@ final class PracticeModel: ObservableObject {
         case .perfect: feedback = "真棒！又点亮一颗小星星。"
         case .early: feedback = "音弹对啦，再等一点点节拍。"
         case .late: feedback = "音弹对啦，下次早一点点。"
-        case .wrong: feedback = hands == .both ? "看看两只手，再试试发光的音符。" : "再看看发光的音符，小兔等你。"
+        case .wrong: feedback = "这一音已记下，继续弹下一个亮起的音符。"
         case .missed: break
-        }
-        if grade == .wrong && guided && style == .follow && voiceHints && time - lastVoiceTime > 3 {
-            lastVoiceTime = time
-            let notes = target.sorted().map(Music.name).joined(separator: "、")
-            pause(); feedback = "请再试试 \(notes)，点击开始继续。"
-            demonstrator.speak("再试试亮起来的音符。")
         }
         if performance.finished { finish() }
     }

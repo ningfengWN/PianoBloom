@@ -3,6 +3,8 @@ import SwiftUI
 struct GrandStaffView: View {
     @ObservedObject var model: PracticeModel
     let wide: Bool
+    @State private var bloomVisible = false
+    @State private var bloomTask: Task<Void, Never>?
     private var perLine: Int { wide ? (model.score.isHanon && model.notationScale < 1.5 ? 16 : 8) : 4 }
     private var lineCount: Int { (model.performance.score.events.count + perLine - 1) / perLine }
     var body: some View {
@@ -11,7 +13,7 @@ struct GrandStaffView: View {
                 LazyVStack(spacing: 12) {
                     ForEach(0..<lineCount, id: \.self) { row in
                         StaffSystem(score: model.performance.score, start: row * perLine, count: perLine,
-                                    performance: model.performance, position: model.visualPosition, notationScale: model.notationScale, hands: model.hands, wrong: model.lastGrade == .wrong && !model.demonstrating, beat: model.visualBeat, running: model.running || model.demonstrating)
+                                    performance: model.performance, position: model.visualPosition, notationScale: model.notationScale, hands: model.hands, beat: model.visualBeat, running: model.running || model.demonstrating)
                             .frame(height: 236 * model.notationScale)
                             .id(row)
                             .accessibilityLabel("第 \(row + 1) 行双手琴谱")
@@ -25,6 +27,31 @@ struct GrandStaffView: View {
                 if model.performance.position == 0 { proxy.scrollTo(0, anchor: .top) }
             }
         }
+        .overlay(alignment: .topTrailing) {
+            if bloomVisible {
+                HStack(spacing: 5) {
+                    Text("✿").font(.system(size: 25))
+                    Text(model.lastGrade == .wrong ? "记下啦" : "小花开啦").font(.caption.bold())
+                }
+                .foregroundStyle(model.lastGrade == .wrong ? Color.pink : Color(red: 0.19, green: 0.64, blue: 0.50))
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .background(.white, in: Capsule()).shadow(color: .pink.opacity(0.12), radius: 6, y: 2)
+                .padding(12).transition(.scale(scale: 0.5).combined(with: .opacity))
+                .accessibilityHidden(true).allowsHitTesting(false)
+            }
+        }
+        .onChange(of: model.performance.position) { position in
+            guard !model.demonstrating, position > 0,
+                  let judgment = model.performance.judgments[position - 1], judgment.grade != .missed else { return }
+            bloomTask?.cancel()
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.65)) { bloomVisible = true }
+            bloomTask = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 650_000_000)
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeOut(duration: 0.2)) { bloomVisible = false }
+            }
+        }
+        .onDisappear { bloomTask?.cancel(); bloomVisible = false }
     }
 }
 
@@ -36,7 +63,6 @@ private struct StaffSystem: View {
     let position: Int
     let notationScale: Double
     let hands: PracticeHands
-    let wrong: Bool
     let beat: Double
     let running: Bool
     private let ink = Color(red: 0.15, green: 0.11, blue: 0.17)
@@ -114,7 +140,7 @@ private struct StaffSystem: View {
                     let event = score.events[index]
                     let notes = lower ? event.left : event.right
                     let centerX = x(event.beat)
-                    let judgment = performance.judgments[index]
+                    let judgment = enabled ? performance.judgments[index] : nil
                     let current = index == position
                     let color: Color
                     switch judgment?.grade {
@@ -122,7 +148,7 @@ private struct StaffSystem: View {
                     case .early?, .late?: color = Color(red: 0.19, green: 0.64, blue: 0.50)
                     case .missed?: color = .gray
                     case .wrong?: color = .red
-                    case nil: color = current ? (wrong ? .red : pink) : ink
+                    case nil: color = current ? pink : ink
                     }
                     let paint = color.opacity(opacity)
                     if Int((event.beat * 100).rounded()) % (score.beatsPerBar * 100) == 0 {
@@ -155,6 +181,21 @@ private struct StaffSystem: View {
                             let offset: CGFloat = judgment?.grade == .early ? -8 : 8
                             let shadow = Path(ellipseIn: CGRect(x: centerX - 5.5 + offset, y: centerY - 3.6, width: 11, height: 7.2))
                             context.stroke(shadow, with: .color(.red.opacity(0.7)), lineWidth: 1.3)
+                        }
+                    }
+                    if let judgment, judgment.grade != .missed {
+                        let noteYs = event.right.map { y($0, lower: false) } + event.left.map { y($0, lower: true) }
+                        let flowerY = min(CGFloat(28), (noteYs.min() ?? 48) - 14)
+                        // One blossom per onset column, shared by both staves.
+                        if !lower || hands == .left || event.right.isEmpty {
+                            let blossom = judgment.grade == .wrong ? pink : Color(red: 0.19, green: 0.64, blue: 0.50)
+                            for petal in 0..<5 {
+                                let angle = Double(petal) * 2 * Double.pi / 5
+                                let petalX = centerX + CGFloat(cos(angle)) * 3.2
+                                let petalY = flowerY + CGFloat(sin(angle)) * 3.2
+                                context.fill(Path(ellipseIn: CGRect(x: petalX - 2.4, y: petalY - 2.4, width: 4.8, height: 4.8)), with: .color(blossom))
+                            }
+                            context.fill(Path(ellipseIn: CGRect(x: centerX - 1.8, y: flowerY - 1.8, width: 3.6, height: 3.6)), with: .color(.yellow))
                         }
                     }
                     // Beams are grouped by beat (never across barlines); half and quarter notes retain their stems.
