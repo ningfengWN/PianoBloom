@@ -29,6 +29,7 @@ final class PracticeModel: ObservableObject {
     @Published private(set) var calibrated: Bool
     @Published private(set) var calibrating = false
     @Published private(set) var running = false
+    @Published private(set) var exploring = false
     @Published private(set) var now = ProcessInfo.processInfo.systemUptime
     @Published private(set) var lastGrade: NoteGrade?
     @Published private(set) var results: [PracticeResult] = []
@@ -71,7 +72,7 @@ final class PracticeModel: ObservableObject {
         latencyMS = min(300, max(-300, defaults.double(forKey: "latencyMS")))
         if let data = defaults.data(forKey: "results"), let history = try? JSONDecoder().decode([PracticeResult].self, from: data) { results = history }
         microphone.onFrame = { [weak self] in self?.receive($0) }
-        microphone.onReady = { [weak self] in if self?.calibrating == false { self?.beginClock() } }
+        microphone.onReady = { [weak self] in if self?.calibrating == false && self?.exploring == false { self?.beginClock() } }
         microphone.onStop = { [weak self] in self?.didStop() }
         midi.onNote = { [weak self] note, on, time in
             guard let self, self.input == .midi, self.running else { return }
@@ -150,8 +151,13 @@ final class PracticeModel: ObservableObject {
             startedAt = nil; running = false; timer?.invalidate(); timer = nil
             feedback = "聆听暂停了，准备好后可以继续。"
         }
-        calibrating = false; calibrationTimer?.invalidate(); calibrationTimer = nil
+        calibrating = false; exploring = false; calibrationTimer?.invalidate(); calibrationTimer = nil
         heard = []; gate.reset(); polyGate.reset()
+    }
+    func explore() {
+        pause(); exploring = true
+        microphone.polyphonic = false; microphone.reference = reference
+        microphone.start()
     }
     func calibrate() {
         pause(); calibrator.reset(); calibrating = true
@@ -174,6 +180,10 @@ final class PracticeModel: ObservableObject {
                 reference = c; calibrated = true; defaults.set(c, forKey: "centralC")
                 pause(); feedback = "校准好啦！松开琴键，再进入小小音乐会。"
             }
+            return
+        }
+        if exploring {
+            if let f = frame.frequency, frame.rms >= threshold { heard = [Int(Music.pitch(f, reference: reference).rounded())] } else { heard = [] }
             return
         }
         guard running, input == .microphone else { return }

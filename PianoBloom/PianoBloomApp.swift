@@ -31,6 +31,7 @@ struct GardenHome: View {
     @ObservedObject var model: PracticeModel
     @Environment(\.scenePhase) private var scenePhase
     @State private var performing = false
+    @State private var freeListening = false
     @State private var settings = false
     @State private var history = false
     @State private var hanon = false
@@ -55,11 +56,13 @@ struct GardenHome: View {
             .navigationTitle("琴芽 · 小兔钢琴花园").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
+                    Button { model.pause(); freeListening = true } label: { Image(systemName: "tuningfork") }.accessibilityLabel("自由识音")
                     Button { history = true } label: { Image(systemName: "clock.arrow.circlepath") }.accessibilityLabel("练习记录")
                     Button { settings = true } label: { Image(systemName: "slider.horizontal.3") }.accessibilityLabel("家长设置")
                 }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) { launchButton }
+            .sheet(isPresented: $freeListening) { FreeListeningView(model: model) }
             .sheet(isPresented: $settings) { ParentSettings(model: model) }
             .sheet(isPresented: $history) { HistoryView(model: model) }
             .fullScreenCover(isPresented: $performing) { PerformanceScreen(model: model) }
@@ -460,5 +463,36 @@ private struct HistoryView: View {
                 }
             }.navigationTitle("我的音乐小花").toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
         }
+    }
+}
+
+private struct FreeListeningView: View {
+    @ObservedObject var model: PracticeModel
+    @ObservedObject private var microphone: Microphone
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
+    init(model: PracticeModel) { self.model = model; self.microphone = model.microphone }
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                BunnyMascot().frame(width: 110, height: 130)
+                Text("每个声音，都有名字").font(.title2.bold()).foregroundStyle(Bloom.ink)
+                Text(model.heard.sorted().map(Music.name).joined(separator: " ").isEmpty ? "—" : model.heard.sorted().map(Music.name).joined(separator: " "))
+                    .font(.system(size: 64, weight: .bold, design: .rounded)).foregroundStyle(Bloom.pink)
+                Text(model.heard.sorted().map(Music.solfege).joined(separator: " ")).font(.title3).foregroundStyle(Bloom.lilac)
+                Text("一次弹一个音，自由探索，不计对错。").font(.subheadline).foregroundStyle(.secondary)
+                ProgressView(value: min(1, microphone.level * 16)).tint(Bloom.pink).frame(maxWidth: 280)
+                if microphone.state == .denied {
+                    Button("打开系统设置，允许麦克风") { if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) } }
+                }
+                if case let .failed(message) = microphone.state { Text(message).font(.caption).foregroundStyle(.orange) }
+                Button { if model.exploring || microphone.requesting { model.pause() } else { model.explore() } } label: {
+                    Label(model.exploring || microphone.requesting ? "暂停聆听" : "开始聆听", systemImage: model.exploring ? "pause.fill" : "mic.fill").font(.headline).padding(8)
+                }.buttonStyle(.borderedProminent).clipShape(Capsule())
+                Spacer(minLength: 0)
+            }.padding(32).frame(maxWidth: .infinity, maxHeight: .infinity).background(Bloom.blush)
+                .navigationTitle("自由识音").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { model.pause(); dismiss() } } }
+        }.onDisappear { model.pause() }
     }
 }
