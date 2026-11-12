@@ -118,7 +118,10 @@ private struct StaffSystem: View {
             }
             for (lower, bottom) in [(false, topBottom), (true, lowBottom)] {
                 let enabled = lower ? hands != .right : hands != .left
-                let opacity = enabled ? 1.0 : 0.60
+                let opacity = enabled ? 1.0 : 0.35
+                if enabled {
+                    context.fill(Path(CGRect(x: 28, y: bottom - 45, width: max(0, right - 28), height: 55)), with: .color(pink.opacity(0.035)))
+                }
                 var staff = Path()
                 for line in 0..<5 {
                     staff.move(to: CGPoint(x: 28, y: bottom - CGFloat(line) * gap))
@@ -147,8 +150,8 @@ private struct StaffSystem: View {
                     case .perfect?: color = Color(red: 0.19, green: 0.64, blue: 0.50)
                     case .early?, .late?: color = Color(red: 0.19, green: 0.64, blue: 0.50)
                     case .missed?: color = .gray
-                    case .wrong?: color = .red
-                    case nil: color = current ? pink : ink
+                    case .wrong?: color = pink
+                    case nil: color = current && enabled ? pink : ink
                     }
                     let paint = color.opacity(opacity)
                     if Int((event.beat * 100).rounded()) % (score.beatsPerBar * 100) == 0 {
@@ -229,6 +232,21 @@ private struct StaffSystem: View {
                 }
                 var final = Path(); final.move(to: CGPoint(x: right, y: bottom - 40)); final.addLine(to: CGPoint(x: right, y: bottom))
                 context.stroke(final, with: .color(ink.opacity(0.4)), lineWidth: end == score.events.count ? 2 : 1)
+            }
+            // The current note's fixed-do label sits between the staves, away from noteheads.
+            if position >= start && position < end {
+                let current = score.events[position]
+                let notes = current.pitches(hands).sorted()
+                let names = notes.map(Music.solfege).reduce(into: [String]()) { result, name in
+                    if !result.contains(name) { result.append(name) }
+                }
+                let label = names.prefix(3).joined(separator: " · ")
+                if !label.isEmpty {
+                    let width = max(CGFloat(30), CGFloat(label.count) * 5.5 + 12)
+                    let labelX = min(right - width / 2, max(left, x(current.beat)))
+                    context.fill(Path(roundedRect: CGRect(x: labelX - width / 2, y: 120, width: width, height: 18), cornerRadius: 5), with: .color(pink))
+                    text(label, CGPoint(x: labelX, y: 129), .system(size: 10, weight: .bold, design: .rounded), .white)
+                }
             }
             if running && performance.style == .rhythm && beat >= firstBeat && beat < endBeat {
                 let cursor = x(beat)

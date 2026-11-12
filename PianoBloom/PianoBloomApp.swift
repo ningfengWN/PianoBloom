@@ -226,24 +226,25 @@ struct PerformanceScreen: View {
     var body: some View {
         GeometryReader { geometry in
             let wide = geometry.size.width > 700
-            let short = geometry.size.height < 500
-            VStack(spacing: short ? 8 : 14) {
+            let short = geometry.size.height < 600
+            VStack(spacing: 0) {
                 header(wide: wide)
-                handSelector
-                if !short {
-                    if model.guided { guidedStrip }
-                    sessionStrip(wide: wide)
+                practiceNavigation(wide: wide)
+                Rectangle().fill(Bloom.pink.opacity(0.16)).frame(height: 2)
+                VStack(spacing: 0) {
+                    scoreTitle(wide: wide)
+                    ZStack {
+                        GrandStaffView(model: model, wide: wide)
+                        if let count = model.countIn { countIn(count) }
+                    }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                }.background(.white)
+                if showKeyboard || model.demonstrating {
+                    PerformanceKeyboard(heard: model.heard, target: model.target)
+                        .frame(height: short ? 48 : (geometry.size.width > geometry.size.height ? 64 : 76))
+                        .padding(.horizontal, wide ? 16 : 8).padding(.top, 6)
                 }
-                ZStack {
-                    GrandStaffView(model: model, wide: wide)
-                    if let count = model.countIn { countIn(count) }
-                    if !model.running && !model.demonstrating && !model.microphone.requesting && model.performance.epoch == nil { readyOverlay(compact: short) }
-                }.frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(.white, in: RoundedRectangle(cornerRadius: 26))
-                    .overlay(RoundedRectangle(cornerRadius: 26).stroke(Bloom.pink.opacity(0.08), lineWidth: 1))
-                if showKeyboard || model.demonstrating { PerformanceKeyboard(heard: model.heard, target: model.target).frame(height: short ? 48 : 88) }
                 controls(wide: wide)
-            }.padding(.horizontal, wide ? 28 : 12).padding(.top, short ? 4 : 16).padding(.bottom, 8)
+            }.padding(.bottom, 4)
                 .background(Bloom.blush)
                 .overlay { if model.showResult { ResultGarden(model: model) { model.showResult = false; dismiss() } } }
         }
@@ -269,38 +270,43 @@ struct PerformanceScreen: View {
         }
         .onDisappear { model.pause(); UIApplication.shared.isIdleTimerDisabled = false }
     }
-    private var guidedStrip: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(Array(GuidedStage.allCases.dropLast().enumerated()), id: \.offset) { index, stage in
-                        if stage == .right || stage == .left || stage == .both {
-                            Button { model.selectHandsDuringPractice(stage.hands) } label: {
-                                stepLabel(index: index, stage: stage)
-                            }.buttonStyle(.plain).id(stage.rawValue)
-                                .accessibilityHint("从当前小段开头重新练习，可直接切换")
-                        } else {
-                            stepLabel(index: index, stage: stage).id(stage.rawValue)
-                        }
-                    }
-                }
-            }
-            .onAppear { proxy.scrollTo(model.journey.stage.rawValue, anchor: .center) }
-            .onChange(of: model.journey.stage) { stage in
-                withAnimation { proxy.scrollTo(stage.rawValue, anchor: .center) }
-            }
-        }
-    }
     private var handSelector: some View {
         Picker("选择演奏手", selection: Binding(get: { model.hands }, set: { model.selectHandsDuringPractice($0) })) {
             ForEach([PracticeHands.left, .right, .both], id: \.self) { hand in Text(hand.rawValue).tag(hand) }
         }.pickerStyle(.segmented)
             .accessibilityHint("切换后从当前小段开头继续，正在收音时会自动恢复")
     }
-    private func stepLabel(index: Int, stage: GuidedStage) -> some View {
-        Text("\(index + 1) \(stage.title)").font(.caption.bold()).padding(.horizontal, 12).padding(.vertical, 8)
-            .foregroundStyle(model.journey.stage == stage ? .white : Bloom.lilac)
-            .background(model.journey.stage == stage ? Bloom.pink : .white, in: Capsule())
+    private func practiceNavigation(wide: Bool) -> some View {
+        HStack(spacing: 12) {
+            handSelector.frame(maxWidth: wide ? 280 : .infinity)
+            if wide {
+                Text(model.guided ? model.guidedTitle : model.style.rawValue)
+                    .font(.caption.bold()).foregroundStyle(Bloom.lilac)
+                Spacer(minLength: 0)
+                HStack(spacing: 5) {
+                    ForEach(0..<model.score.beatsPerBar, id: \.self) { index in
+                        let active = model.running && (Int(floor(model.beat)) % model.score.beatsPerBar + model.score.beatsPerBar) % model.score.beatsPerBar == index
+                        Circle().fill(active ? Bloom.pink : Bloom.pink.opacity(0.18)).frame(width: 7, height: 7)
+                    }
+                }.accessibilityLabel("节拍指示")
+                Text("\(Int(model.bpm)) BPM").font(.caption.monospacedDigit()).foregroundStyle(Bloom.ink)
+            }
+        }.padding(.horizontal, wide ? 20 : 12).padding(.bottom, 8)
+    }
+    private func scoreTitle(wide: Bool) -> some View {
+        HStack(spacing: 10) {
+            Text(model.guided ? model.guidedRange : model.sectionBar.map { "第 \($0 + 1) 小节起" } ?? "完整曲谱")
+                .font(.caption.bold()).foregroundStyle(Bloom.lilac)
+                .padding(.horizontal, 10).padding(.vertical, 5)
+                .background(Bloom.blush, in: Capsule())
+            Spacer(minLength: 0)
+            Text(model.score.title).font(.system(size: wide ? 20 : 16, weight: .bold, design: .rounded))
+                .foregroundStyle(Bloom.ink).lineLimit(1).minimumScaleFactor(0.7)
+            Spacer(minLength: 0)
+            if wide { BunnyMascot().frame(width: 30, height: 34).accessibilityHidden(true) }
+            Text("\(model.performance.position)/\(model.performance.score.events.count)")
+                .font(.caption.monospacedDigit()).foregroundStyle(Bloom.lilac)
+        }.padding(.horizontal, wide ? 24 : 12).frame(height: wide ? 42 : 36)
     }
     private var scoreSettings: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -309,63 +315,51 @@ struct PerformanceScreen: View {
             Slider(value: $model.notationScale, in: 1...1.7, step: 0.05).accessibilityLabel("五线谱大小")
             Toggle("显示琴键", isOn: $showKeyboard)
             Toggle("小兔语音提示", isOn: $model.voiceHints)
+            Button("听听怎么练") { model.speakInstruction() }
             Button("音符颜色说明") { showScoreSettings = false; showReview = true }
             Text("小花标记表示已弹过：绿色为正确，粉红色为错音；灰色表示漏弹。错音自动记下并继续，不会暂停收音。")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
     private func header(wide: Bool) -> some View {
-        HStack(spacing: 14) {
+        HStack(spacing: wide ? 16 : 8) {
             Button { model.pause(); dismiss() } label: {
-                Image(systemName: "chevron.left").font(.headline).frame(width: 44, height: 44).background(.white, in: Circle())
+                Image(systemName: "chevron.left").font(.headline).frame(width: 44, height: 44)
+                    .background(.white, in: Circle())
             }.accessibilityLabel("暂停并返回曲库")
-            VStack(alignment: .leading, spacing: 3) {
-                Text(model.score.title).font(.system(size: wide ? 25 : 19, weight: .bold, design: .rounded)).foregroundStyle(Bloom.ink)
-                Text(model.guided ? "\(model.guidedRange) · \(model.guidedTitle) · \(Int(model.bpm)) BPM" : "\(model.hands.rawValue) · \(model.style.rawValue) · \(Int(model.bpm)) BPM")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 0)
-            Button { model.pause(); showScoreSettings = true } label: { Image(systemName: "textformat.size").frame(width: 44, height: 44).background(.white, in: Circle()) }.accessibilityLabel("调大琴谱和练习设置")
             if wide {
-                HStack(spacing: 5) {
-                    ForEach(0..<3, id: \.self) { index in Image(systemName: "star.fill").foregroundStyle(model.performance.correctCount > index * 8 ? Color.orange : Bloom.pink.opacity(0.18)) }
-                }.font(.title3)
-                BunnyMascot().frame(width: 62, height: 70).accessibilityHidden(true)
-            } else {
-                Text("\(model.performance.position)/\(model.performance.score.events.count)").font(.caption.monospacedDigit()).foregroundStyle(Bloom.pink)
+                VStack(spacing: 4) {
+                    Image(systemName: model.guided ? "leaf.fill" : "music.note.list").font(.title3)
+                    Text(model.guided ? "乐句练习" : "全曲练习").font(.caption.bold())
+                }.foregroundStyle(Bloom.ink).frame(width: 86, height: 58)
+                    .background(.white, in: RoundedRectangle(cornerRadius: 14))
+                VStack(spacing: 4) {
+                    Image(systemName: model.style == .follow ? "music.note" : "metronome.fill")
+                        .font(.title3).foregroundStyle(.white).frame(width: 34, height: 34)
+                        .background(Bloom.pink, in: Circle())
+                    Text(model.style == .follow ? "识谱" : "节奏").font(.caption.bold()).foregroundStyle(Bloom.pink)
+                }.frame(width: 50)
+                Spacer(minLength: 0)
             }
-        }
+            toolButton("重来", icon: "arrow.counterclockwise", active: false) { model.restart() }
+            toolButton(model.demonstrating ? "停止" : "试听", icon: model.demonstrating ? "stop.fill" : "headphones", active: model.demonstrating) {
+                model.demonstrating ? model.pause() : model.demonstrate()
+            }
+            toolButton("琴键", icon: "pianokeys", active: showKeyboard) { showKeyboard.toggle() }
+            toolButton("设置", icon: "gearshape.fill", active: false) { model.pause(); showScoreSettings = true }
+            if !wide { Spacer(minLength: 0) }
+        }.padding(.horizontal, wide ? 20 : 12).padding(.vertical, wide ? 8 : 6)
     }
-    private func sessionStrip(wide: Bool) -> some View {
-        HStack(spacing: 12) {
-            HStack(spacing: 6) {
-                ForEach(0..<model.score.beatsPerBar, id: \.self) { index in
-                    let active = model.running && (Int(floor(model.beat)) % model.score.beatsPerBar + model.score.beatsPerBar) % model.score.beatsPerBar == index
-                    Circle().fill(active ? Bloom.pink : Bloom.pink.opacity(0.16)).frame(width: active ? 12 : 8, height: active ? 12 : 8)
-                }
-            }.frame(width: 72)
-            Text(model.feedback).font(.system(size: wide ? 15 : 12, weight: .medium, design: .rounded)).foregroundStyle(Bloom.ink).lineLimit(2)
-            Spacer(minLength: 0)
-            if wide {
-                Text(model.style == .rhythm ? "节奏 \(model.performance.rhythmScore.map { "\($0)" } ?? "—")" : "已点亮 \(model.performance.correctCount) 颗")
-                    .font(.subheadline.bold()).foregroundStyle(Bloom.lilac)
-            }
-        }.padding(.horizontal, 16).frame(minHeight: 44).background(.white.opacity(0.7), in: Capsule())
-    }
-    private func readyOverlay(compact: Bool) -> some View {
-        VStack(spacing: compact ? 8 : 14) {
-            Text(model.guided ? model.guidedTitle : "准备好，让音符开花了吗？").font(.headline).foregroundStyle(Bloom.ink)
-            if !compact {
-                Text(model.guided ? model.journey.stage.instruction : "先数 \(model.score.beatsPerBar) 拍，再开始弹奏")
-                    .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
-            }
-            HStack(spacing: 20) {
-                Button { model.demonstrate() } label: { Label("先听示范", systemImage: "play.rectangle") }
-                if model.voiceHints { Button { model.speakInstruction() } label: { Label("听听怎么练", systemImage: "speaker.wave.2") } }
-            }.font(.subheadline.bold())
-            Button { model.toggle() } label: { Label("开始演奏", systemImage: "play.fill").font(.headline).padding(8) }
-                .buttonStyle(.borderedProminent).clipShape(Capsule())
-        }.padding(compact ? 12 : 26).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 26)).padding(14)
+    private func toolButton(_ title: String, icon: String, active: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 3) {
+                Image(systemName: icon).font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(active ? .white : Bloom.pink)
+                    .frame(width: 40, height: 40)
+                    .background(active ? Bloom.pink : .white, in: Circle())
+                Text(title).font(.system(size: 11, weight: .medium)).foregroundStyle(Bloom.ink)
+            }.frame(minWidth: 46, minHeight: 58)
+        }.buttonStyle(.plain).accessibilityLabel(title)
     }
     private func countIn(_ count: Int) -> some View {
         VStack(spacing: 4) {
@@ -374,31 +368,33 @@ struct PerformanceScreen: View {
         }.foregroundStyle(Bloom.pink).frame(width: 160, height: 160).background(.regularMaterial, in: Circle())
     }
     private func controls(wide: Bool) -> some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 2) {
             if microphone.state == .denied {
                 Button("允许麦克风后继续：打开系统设置") { if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) } }.font(.caption)
             }
             if case let .failed(message) = microphone.state { Text(message).font(.caption).foregroundStyle(.orange) }
             HStack(spacing: 12) {
-                Button { model.restart() } label: { Label("重来", systemImage: "arrow.counterclockwise").font(.subheadline.bold()).frame(minWidth: 64, minHeight: 44) }
+                Button { model.pause(); showReview = true } label: {
+                    Image(systemName: "questionmark.circle").font(.title3).frame(width: 44, height: 44)
+                }.accessibilityLabel("练习说明")
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(model.feedback).font(.system(size: wide ? 13 : 11, weight: .medium, design: .rounded))
+                        .foregroundStyle(Bloom.ink).lineLimit(1)
+                    Text(model.inputDescription + (model.isEstimate ? " · 结果为估算" : ""))
+                        .font(.system(size: 10)).foregroundStyle(Bloom.lilac).lineLimit(1)
+                }.frame(maxWidth: .infinity, alignment: .leading)
                 if wide {
-                    Button { model.demonstrating ? model.pause() : model.demonstrate() } label: { Label(model.demonstrating ? "停止示范" : "示范", systemImage: "play.rectangle").font(.subheadline.bold()).frame(minHeight: 44) }
-                    Button { model.pause(); showReview = true } label: { Image(systemName: "questionmark.circle").frame(width: 44, height: 44) }.accessibilityLabel("颜色与练习说明")
-                    Button { showKeyboard.toggle() } label: { Label(showKeyboard ? "收起键盘" : "键盘", systemImage: "pianokeys").font(.subheadline.bold()).frame(minHeight: 44) }
+                    Text(model.style == .rhythm ? "节奏 \(model.performance.rhythmScore.map { "\($0)" } ?? "—")" : "✿ \(model.performance.correctCount)")
+                        .font(.subheadline.bold()).foregroundStyle(Bloom.mint)
                 }
-                Spacer(minLength: 0)
-                VStack(spacing: 2) {
-                    Text(model.inputDescription).font(.caption.bold()).foregroundStyle(Bloom.ink)
-                    if model.isEstimate { Text("识音与节奏结果为估算").font(.caption2).foregroundStyle(Bloom.lilac) }
-                }
-                Spacer(minLength: 0)
                 Button { model.toggle() } label: {
-                    Label(model.demonstrating ? "停止示范" : (model.running || microphone.requesting ? "暂停" : "开始"), systemImage: model.demonstrating ? "stop.fill" : (model.running ? "pause.fill" : "play.fill"))
-                        .font(.headline).frame(minWidth: wide ? 120 : 70, minHeight: 34)
+                    Label(model.demonstrating ? "停止" : (model.running || microphone.requesting ? "暂停" : "开始"), systemImage: model.demonstrating ? "stop.fill" : (model.running ? "pause.fill" : "play.fill"))
+                        .font(.subheadline.bold()).frame(minWidth: wide ? 92 : 68, minHeight: 32)
                 }.buttonStyle(.borderedProminent).clipShape(Capsule())
             }
-        }
+        }.padding(.horizontal, wide ? 16 : 8).padding(.top, 4)
     }
+
 }
 
 struct PerformanceKeyboard: View {
@@ -528,7 +524,7 @@ private struct ParentSettings: View {
                     Text("曲谱与所有音频分析均在设备运行，不保存录音、不上传声音。")
                 }
                 Section("琴谱与署名") {
-                    Text("PianoBloom 2.2 · 连续练琴")
+                    Text("PianoBloom 2.3 · 大谱面练琴")
                     Text("哈农 1–20：Steve Taylor / Javier Ruiz-Alma，Mutopia，CC BY-SA 4.0。保留双手、时值，展开原谱反复。启蒙双手曲为本 App 教学改编。")
                     Link("查看曲谱来源", destination: URL(string: "https://www.mutopiaproject.org/ftp/HanonCL/virtuoso-pianist-pt1/")!)
                 }
