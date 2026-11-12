@@ -376,7 +376,7 @@ struct PerformanceScreen: View {
                 }
                 Spacer(minLength: 0)
                 Button { model.toggle() } label: {
-                    Label(model.running || microphone.requesting ? "暂停" : "开始", systemImage: model.running ? "pause.fill" : "play.fill")
+                    Label(model.demonstrating ? "停止示范" : (model.running || microphone.requesting ? "暂停" : "开始"), systemImage: model.demonstrating ? "stop.fill" : (model.running ? "pause.fill" : "play.fill"))
                         .font(.headline).frame(minWidth: wide ? 120 : 70, minHeight: 34)
                 }.buttonStyle(.borderedProminent).clipShape(Capsule())
             }
