@@ -1,0 +1,21 @@
+// !$*UTF8*$!
+{ archiveVersion = 1; classes = {}; objectVersion = 56; objects = {
+000000000000000000000001 = { isa = PBXProject; buildConfigurationList = 00000000000000000000000D; compatibilityVersion = "Xcode 14.0"; mainGroup = 000000000000000000000002; productRefGroup = 000000000000000000000004; targets = (000000000000000000000005); attributes = { LastUpgradeCheck = 1500; }; };
+000000000000000000000002 = { isa = PBXGroup; children = (000000000000000000000003, 000000000000000000000004); sourceTree = "<group>"; };
+000000000000000000000003 = { isa = PBXGroup; path = PianoBloom; children = (000000000000000000000007, 000000000000000000000008); sourceTree = "<group>"; };
+000000000000000000000004 = { isa = PBXGroup; name = Products; children = (000000000000000000000006); sourceTree = "<group>"; };
+000000000000000000000007 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PianoBloomApp.swift; sourceTree = "<group>"; };
+000000000000000000000008 = { isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+000000000000000000000006 = { isa = PBXFileReference; explicitFileType = wrapper.application; path = PianoBloom.app; sourceTree = BUILT_PRODUCTS_DIR; };
+000000000000000000000009 = { isa = PBXBuildFile; fileRef = 000000000000000000000007; };
+00000000000000000000000A = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000009); runOnlyForDeploymentPostprocessing = 0; };
+00000000000000000000000B = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+00000000000000000000000C = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+000000000000000000000005 = { isa = PBXNativeTarget; name = PianoBloom; productName = PianoBloom; productReference = 000000000000000000000006; productType = "com.apple.product-type.application"; buildConfigurationList = 00000000000000000000000E; buildPhases = (00000000000000000000000A,00000000000000000000000B,00000000000000000000000C); buildRules = (); dependencies = (); };
+00000000000000000000000D = { isa = XCConfigurationList; buildConfigurations = (00000000000000000000000F,000000000000000000000010); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+00000000000000000000000F = { isa = XCBuildConfiguration; name = Debug; buildSettings = { SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 16.0; SWIFT_VERSION = 5.0; }; };
+000000000000000000000010 = { isa = XCBuildConfiguration; name = Release; buildSettings = { SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 16.0; SWIFT_VERSION = 5.0; }; };
+00000000000000000000000E = { isa = XCConfigurationList; buildConfigurations = (000000000000000000000011,000000000000000000000012); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+000000000000000000000011 = { isa = XCBuildConfiguration; name = Debug; buildSettings = { SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 16.0; SWIFT_VERSION = 5.0; PRODUCT_BUNDLE_IDENTIFIER = com.pianobloom.app; PRODUCT_NAME = "$(TARGET_NAME)"; INFOPLIST_FILE = PianoBloom/Info.plist; TARGETED_DEVICE_FAMILY = "1,2"; CODE_SIGN_STYLE = Automatic; }; };
+000000000000000000000012 = { isa = XCBuildConfiguration; name = Release; buildSettings = { SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 16.0; SWIFT_VERSION = 5.0; PRODUCT_BUNDLE_IDENTIFIER = com.pianobloom.app; PRODUCT_NAME = "$(TARGET_NAME)"; INFOPLIST_FILE = PianoBloom/Info.plist; TARGETED_DEVICE_FAMILY = "1,2"; CODE_SIGN_STYLE = Automatic; }; };
+}; rootObject = 000000000000000000000001; }
