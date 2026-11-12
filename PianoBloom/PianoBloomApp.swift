@@ -280,8 +280,10 @@ struct PerformanceScreen: View {
         HStack(spacing: 12) {
             handSelector.frame(maxWidth: wide ? 280 : .infinity)
             if wide {
-                Text(model.guided ? model.guidedTitle : model.style.rawValue)
-                    .font(.caption.bold()).foregroundStyle(Bloom.lilac)
+                Picker("选择练法", selection: Binding(get: { model.practiceMode }, set: { model.selectPracticeMode($0) })) {
+                    ForEach(PracticeMode.allCases, id: \.self) { mode in Text(mode.rawValue).tag(mode) }
+                }.pickerStyle(.segmented).frame(width: 220)
+                    .accessibilityHint("识谱、节奏、演奏均可直接选择，无需解锁")
                 Spacer(minLength: 0)
                 HStack(spacing: 5) {
                     ForEach(0..<model.score.beatsPerBar, id: \.self) { index in
@@ -290,15 +292,32 @@ struct PerformanceScreen: View {
                     }
                 }.accessibilityLabel("节拍指示")
                 Text("\(Int(model.bpm)) BPM").font(.caption.monospacedDigit()).foregroundStyle(Bloom.ink)
+            } else {
+                Menu {
+                    ForEach(PracticeMode.allCases, id: \.self) { mode in
+                        Button(mode.rawValue) { model.selectPracticeMode(mode) }
+                    }
+                } label: {
+                    Label(model.practiceMode.rawValue, systemImage: "chevron.down").font(.caption.bold()).frame(minWidth: 60, minHeight: 36)
+                }.accessibilityLabel("选择练法：\(model.practiceMode.rawValue)")
             }
         }.padding(.horizontal, wide ? 20 : 12).padding(.bottom, 8)
     }
     private func scoreTitle(wide: Bool) -> some View {
         HStack(spacing: 10) {
-            Text(model.guided ? "整曲 · " + model.guidedRange : "完整曲谱")
-                .font(.caption.bold()).foregroundStyle(Bloom.lilac)
-                .padding(.horizontal, 10).padding(.vertical, 5)
-                .background(Bloom.blush, in: Capsule())
+            Menu {
+                Button("整首曲子") { model.selectPracticeRange(nil) }
+                ForEach(0..<model.phraseCount, id: \.self) { phrase in
+                    Button("第 \(phrase * 2 + 1)–\(min(phrase * 2 + 2, Int(ceil(model.score.length / Double(model.score.beatsPerBar)))) ) 小节") {
+                        model.selectPracticeRange(phrase * 2)
+                    }
+                }
+            } label: {
+                Label(model.sectionBar.map { "整曲 · 第 \($0 + 1) 小节起" } ?? "整首曲子", systemImage: "chevron.down")
+                    .font(.caption.bold()).foregroundStyle(Bloom.lilac)
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(Bloom.blush, in: Capsule())
+            }.accessibilityLabel("选择整曲或练习小段")
             Spacer(minLength: 0)
             Text(model.score.title).font(.system(size: wide ? 20 : 16, weight: .bold, design: .rounded))
                 .foregroundStyle(Bloom.ink).lineLimit(1).minimumScaleFactor(0.7)
@@ -330,14 +349,14 @@ struct PerformanceScreen: View {
             if wide {
                 VStack(spacing: 4) {
                     Image(systemName: model.guided ? "leaf.fill" : "music.note.list").font(.title3)
-                    Text(model.guided ? "乐句练习" : "全曲练习").font(.caption.bold())
+                    Text(model.sectionBar == nil ? "全曲练习" : "小段练习").font(.caption.bold())
                 }.foregroundStyle(Bloom.ink).frame(width: 86, height: 58)
                     .background(.white, in: RoundedRectangle(cornerRadius: 14))
                 VStack(spacing: 4) {
                     Image(systemName: model.style == .follow ? "music.note" : "metronome.fill")
                         .font(.title3).foregroundStyle(.white).frame(width: 34, height: 34)
                         .background(Bloom.pink, in: Circle())
-                    Text(model.style == .follow ? "识谱" : "节奏").font(.caption.bold()).foregroundStyle(Bloom.pink)
+                    Text(model.practiceMode.rawValue).font(.caption.bold()).foregroundStyle(Bloom.pink)
                 }.frame(width: 50)
                 Spacer(minLength: 0)
             }
@@ -472,6 +491,8 @@ private struct ResultGarden: View {
                     } else {
                         Button("再开一朵小花") { model.restart() }.buttonStyle(.borderedProminent).controlSize(.large).clipShape(Capsule())
                     }
+                    Button("返回曲谱，自选练法") { model.beginFree(); model.restart() }
+                        .buttonStyle(.bordered).controlSize(.large)
                     if !model.weakBars.isEmpty {
                         VStack(spacing: 10) {
                             Text("这些小节，再开一朵花").font(.headline)

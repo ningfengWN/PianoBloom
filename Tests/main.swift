@@ -246,4 +246,6 @@ let mappedJudgments = excerptMap.judgments([0: EventJudgment(grade: .perfect, er
 check(mappedJudgments[excerptMap.indices[0]]?.grade == .perfect && mappedJudgments[0] == nil, "played flower appears on global note, not first row")
 check(excerptMap.positions([0]) == [excerptMap.indices[0]], "mistake review aligns with the complete score")
 check(ScoreDisplayMap(score: displayScore, sectionBar: 999).indices.isEmpty, "out of range excerpt safely maps no notes")
+check(PracticeMode.allCases.count == 3 && PracticeMode.performance.style == .rhythm, "performance mode is directly selectable with timing score")
+check(PracticeMode.reading.style == .follow && PracticeMode.rhythm.style == .rhythm, "independent practice modes map to existing scoring engines")
 print("PASS: \(checks) production core checks")

@@ -19,6 +19,7 @@ final class PracticeModel: ObservableObject {
     @Published private(set) var score = PianoScore.all[0]
     @Published private(set) var hands: PracticeHands = .both
     @Published private(set) var style: PlayStyle = .follow
+    @Published private(set) var practiceMode: PracticeMode = .reading
     @Published private(set) var input: PianoInput = .microphone
     @Published private(set) var bpm = 60.0
     @Published private(set) var sectionBar: Int?
@@ -133,7 +134,7 @@ final class PracticeModel: ObservableObject {
         pause()
         guided = false
         if let hands { self.hands = hands }
-        if let style { self.style = style }
+        if let style { self.style = style; practiceMode = style == .follow ? .reading : .rhythm }
         if let input { self.input = input }
         if let bpm { self.bpm = min(120, max(30, bpm)) }
         restart()
@@ -141,20 +142,32 @@ final class PracticeModel: ObservableObject {
     /// A hand change starts a fresh attempt of the same excerpt; it never mixes scores across hands.
     /// If input was active, reconnect it automatically with the new mono/polyphonic analysis mode.
     func selectHandsDuringPractice(_ selection: PracticeHands) {
-        let targetStage: GuidedStage = selection == .right ? .right : selection == .left ? .left : .both
-        guard selection != hands || (guided && journey.stage != targetStage) else { return }
+        guard selection != hands || guided else { return }
         let resume = running || microphone.requesting
         let replayDemo = demonstrating
         pause()
         hands = selection
-        if guided {
-            journey.chooseHand(selection); style = .follow
-            completedJourney = nil; saveJourney()
-        }
+        // Explicit choices leave the suggested journey. Mode and range stay independent.
+        guided = false; completedJourney = nil
         restart()
-        feedback = "已切换到\(selection.rawValue)，从这一段开头继续。"
+        feedback = "已切换到\(selection.rawValue) · \(practiceMode.rawValue)，从当前范围开头继续。"
         if resume { toggle() }
         else if replayDemo { demonstrate() }
+    }
+    func selectPracticeMode(_ selection: PracticeMode) {
+        guard selection != practiceMode || guided else { return }
+        let resume = running || microphone.requesting
+        let replayDemo = demonstrating
+        pause(); guided = false; completedJourney = nil
+        practiceMode = selection; style = selection.style
+        restart()
+        feedback = "已选择\(selection.rawValue)，可随时切换练法和左右手。"
+        if resume { toggle() }
+        else if replayDemo { demonstrate() }
+    }
+    func selectPracticeRange(_ bar: Int?) {
+        guided = false; completedJourney = nil
+        selectSection(bar)
     }
     func selectSection(_ bar: Int?) { sectionBar = bar; restart() }
     func restart() {
@@ -172,6 +185,7 @@ final class PracticeModel: ObservableObject {
     func beginFree() { pause(); guided = false }
     private func applyJourney() {
         hands = journey.stage.hands; style = journey.stage.style
+        practiceMode = journey.stage == .concert ? .performance : (style == .follow ? .reading : .rhythm)
         sectionBar = journey.wholeSong ? nil : journey.phrase * 2
         restart(); feedback = journey.stage.instruction
         if voiceHints { demonstrator.speak(journey.stage.instruction) }

@@ -2,6 +2,10 @@ import Foundation
 
 enum PracticeHands: String, CaseIterable, Codable { case right = "右手", left = "左手", both = "双手" }
 enum PlayStyle: String, CaseIterable { case follow = "跟谱练习", rhythm = "节奏挑战" }
+enum PracticeMode: String, CaseIterable {
+    case reading = "识谱", rhythm = "节奏", performance = "演奏"
+    var style: PlayStyle { self == .reading ? .follow : .rhythm }
+}
 
 struct ScoreEvent: Equatable {
     let beat: Double
