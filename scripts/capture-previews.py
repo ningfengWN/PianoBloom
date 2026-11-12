@@ -7,7 +7,10 @@ def run(*args, timeout=60, check=True):
         stdout, stderr = process.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
         os.killpg(process.pid, signal.SIGKILL)
-        process.communicate(timeout=5)
+        try:
+            process.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.stdout.close(); process.stderr.close()
         raise TimeoutError(f"Command exceeded {timeout}s: {args}")
     if check and process.returncode:
         raise RuntimeError(f"Command failed: {args}: {stderr[-2500:]}")
@@ -26,8 +29,6 @@ for family in (('iPad', 'iPhone') if options.family == 'all' else [options.famil
     uid = device['udid']
     run('xcrun','simctl','boot',uid,check=False)
     run('xcrun','simctl','bootstatus',uid,'-b',timeout=110)
-    run('xcrun','simctl','ui',uid,'appearance','light')
-    run('xcrun','simctl','status_bar',uid,'override','--time','09:41','--batteryState','charged','--batteryLevel','100')
     run('xcrun','simctl','install',uid,'build/Build/Products/Debug-iphonesimulator/PianoBloom.app')
     for name, args in [('home', []), ('performance-portrait', ['--preview-performance']), ('guided', ['--preview-performance','--preview-guided'])] + ([('performance-landscape',['--preview-performance','--preview-landscape'])] if family == 'iPad' and not options.skip_landscape else []):
         run('xcrun','simctl','terminate',uid,'com.pianobloom.app',check=False)
