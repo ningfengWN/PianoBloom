@@ -30,7 +30,7 @@ struct GardenHome: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
                         welcome
-                        if geometry.size.width > 850 {
+                        if geometry.size.width > 750 {
                             HStack(alignment: .top, spacing: 24) {
                                 setup.frame(width: 310)
                                 library
@@ -197,6 +197,7 @@ private struct InputSelector: View {
 
 struct PerformanceScreen: View {
     @ObservedObject var model: PracticeModel
+    @State private var showKeyboard = false
     @ObservedObject private var microphone: Microphone
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
@@ -215,7 +216,7 @@ struct PerformanceScreen: View {
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(.white, in: RoundedRectangle(cornerRadius: 26))
                     .overlay(RoundedRectangle(cornerRadius: 26).stroke(Bloom.pink.opacity(0.08), lineWidth: 1))
-                if wide && !short { PerformanceKeyboard(heard: model.heard, target: model.target).frame(height: 88) }
+                if wide && !short && showKeyboard { PerformanceKeyboard(heard: model.heard, target: model.target).frame(height: 88) }
                 controls(wide: wide)
             }.padding(.horizontal, wide ? 28 : 12).padding(.top, short ? 4 : 16).padding(.bottom, 8)
                 .background(Bloom.blush)
@@ -294,6 +295,9 @@ struct PerformanceScreen: View {
             if case let .failed(message) = microphone.state { Text(message).font(.caption).foregroundStyle(.orange) }
             HStack(spacing: 12) {
                 Button { model.restart() } label: { Label("重来", systemImage: "arrow.counterclockwise").font(.subheadline.bold()).frame(minWidth: 64, minHeight: 44) }
+                if wide {
+                    Button { showKeyboard.toggle() } label: { Label(showKeyboard ? "收起键盘" : "键盘", systemImage: "pianokeys").font(.subheadline.bold()).frame(minHeight: 44) }
+                }
                 Spacer(minLength: 0)
                 VStack(spacing: 2) {
                     Text(model.inputDescription).font(.caption.bold()).foregroundStyle(Bloom.ink)

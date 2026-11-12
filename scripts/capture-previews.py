@@ -1,5 +1,5 @@
 """Capture actual compiled SwiftUI layouts; all subprocesses have bounded execution."""
-import json, pathlib, subprocess, time
+import json, pathlib, subprocess, time, struct, hashlib
 
 def run(*args, timeout=60, check=True):
     return subprocess.run(args, check=check, timeout=timeout, text=True, capture_output=True)
@@ -20,5 +20,11 @@ for family in ('iPad', 'iPhone'):
         run('xcrun','simctl','launch',uid,'com.pianobloom.app',*args)
         time.sleep(4)
         run('xcrun','simctl','io',uid,'screenshot',str(output/f'{family}-{name}.png'))
+        image_path = output/f'{family}-{name}.png'
+        if name != 'home':
+            assert hashlib.sha256(image_path.read_bytes()).digest() != hashlib.sha256((output/f'{family}-home.png').read_bytes()).digest(), 'Performance preview did not open'
+        if name == 'performance-landscape':
+            width, height = struct.unpack('>II', image_path.read_bytes()[16:24])
+            assert width > height, f'Landscape request failed: {width}x{height}'
         print(f'Captured {family}: {name}', flush=True)
     run('xcrun','simctl','shutdown',uid)

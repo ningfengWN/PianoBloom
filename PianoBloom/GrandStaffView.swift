@@ -12,7 +12,7 @@ struct GrandStaffView: View {
                     ForEach(0..<lineCount, id: \.self) { row in
                         StaffSystem(score: model.performance.score, start: row * perLine, count: perLine,
                                     performance: model.performance, hands: model.hands, wrong: model.lastGrade == .wrong, beat: model.beat, running: model.running)
-                            .frame(height: wide ? 256 : 236)
+                            .frame(height: wide ? 236 : 230)
                             .id(row)
                             .accessibilityLabel("第 \(row + 1) 行双手琴谱")
                     }
