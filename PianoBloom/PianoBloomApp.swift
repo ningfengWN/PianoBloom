@@ -122,7 +122,6 @@ private struct MicrophoneCard: View {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(model.detected.map(Music.name) ?? "—")
                     .font(.system(size: 62, weight: .semibold, design: .rounded)).monospacedDigit()
-                    .contentTransition(.numericText())
                 Text(model.detected.map(Music.solfege) ?? "等待琴声").font(.title3).foregroundStyle(.white.opacity(0.7))
             }.foregroundStyle(.white).frame(minHeight: 78)
             if let frequency = model.frequency {

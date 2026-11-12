@@ -76,7 +76,7 @@ final class PracticeModel: ObservableObject {
     private func didStop() {
         if let startTime { elapsed += Date().timeIntervalSince(startTime) }
         startTime = nil
-        frequency = nil; detected = nil; lastFrameTime = nil
+        frequency = nil; detected = nil; lastFrameTime = nil; waitingAfterCalibration = false
         gate.reset()
         if calibrating { feedback = "校准已取消，原基准音已保留。" }
         calibrating = false; calibrationTimer?.invalidate(); calibrationTimer = nil
