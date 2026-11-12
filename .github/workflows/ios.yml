@@ -26,9 +26,9 @@ jobs:
           -configuration Release -sdk iphoneos
           -destination 'generic/platform=iOS'
           -derivedDataPath build-device CODE_SIGNING_ALLOWED=NO build
-      - name: Capture iPad and iPhone layouts
+      - name: Capture iPad practice flow
         timeout-minutes: 8
-        run: python3 scripts/capture-previews.py
+        run: python3 scripts/capture-previews.py --family iPad --skip-landscape
       - name: Save simulator app and previews
         if: always()
         uses: actions/upload-artifact@v4

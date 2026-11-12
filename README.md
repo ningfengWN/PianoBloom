@@ -29,7 +29,7 @@
 
 ## 验证
 
-`bash scripts/test-core.sh` 测试生产音高、多音 PCM 分析、MIDI 字节解析、双手匹配、固定网格评分、漏弹、暂停、反复和曲谱完整性。GitHub Actions 运行核心测试、模拟器编译、未签名真机编译，并从实际运行的模拟器导出 iPad 横竖屏与 iPhone 界面截图。截图启动参数仅在 Debug 编译启用，不启动输入、不伪造演奏成绩。
+`bash scripts/test-core.sh` 测试生产音高、多音 PCM 分析、MIDI 字节解析、双手匹配、固定网格评分、漏弹、暂停、反复和曲谱完整性。GitHub Actions 运行核心测试、模拟器编译、未签名真机编译，并从实际运行的模拟器导出 iPad 曲库、全屏琴谱和带练界面截图。完整手机与横屏截图可手动运行 `python3 scripts/capture-previews.py`。截图启动参数仅在 Debug 编译启用，不启动输入、不伪造演奏成绩。
 
 真机麦克风、不同琴型的多音准确率及 USB MIDI 连接仍需实测，参见 [DEVICE_TESTING.md](DEVICE_TESTING.md)。
 
