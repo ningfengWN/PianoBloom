@@ -59,3 +59,7 @@ xcodebuild -project PianoBloom.xcodeproj -scheme PianoBloom \
 GitHub Actions 会运行生产核心代码的合成 PCM 测试，覆盖多个音区、采样率、泛音、偏调、静音与噪声；同时验证持续音、重复音、中央 C 校准和练习进度，并构建模拟器与未签名真机版本、保存模拟器首屏截图。
 
 合成信号测试与编译不等于真钢琴测试。发布前需按 [真机验收清单](DEVICE_TESTING.md) 验证实际钢琴和麦克风表现。
+
+## 哈农曲库
+
+内置第 1–20 首右手原音区音符，含原谱反复；支持整首及每 8 音分段跟谱。仅判断单音顺序，不评节奏或指法，不支持双手合奏。曲谱来源及 CC BY-SA 4.0 署名见 [HANON_SOURCES.md](HANON_SOURCES.md)。

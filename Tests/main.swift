@@ -10,7 +10,7 @@ func frame(_ midi: Int?, _ t: Double, rms: Double = 0.06) -> PitchFrame {
 }
 // Actual PCM is fed to the production detector, including overtones and detuning.
 for rate in [14700.0,16000.0,12000.0] {
-    for midi in [48,55,60,61,64,69,72,83] {
+    for midi in [47,48,55,60,61,64,69,72,83,88] {
         for detune in [0.0, 17.0] {
             let f = Music.frequency(midi) * pow(2, detune / 1200)
             var pcm: [Float] = []
@@ -69,4 +69,16 @@ check(progress.complete && progress.accuracy == 75, "accuracy and completion")
 check(!progress.accept(62) && progress.position == 3, "completion cannot overflow")
 check(Music.staffStep(60) == 0 && Music.staffStep(72) == 7, "staff mapping")
 check(abs(Music.pitch(263, reference:263) - 60) < 0.001, "calibrated note mapping")
+
+
+check(Exercise.hanon.count == 20, "20 Hanon exercises")
+check(Array(Exercise.hanon[0].notes.prefix(8)) == [48,52,53,55,57,55,53,52], "Hanon 1 original opening")
+for exercise in Exercise.hanon {
+    check(!exercise.notes.isEmpty, "nonempty Hanon score")
+    check(exercise.notes.allSatisfy { (47...88).contains($0) }, "Hanon detector range")
+    var run = PracticeProgress(notes: exercise.notes)
+    for note in exercise.notes { _ = run.accept(note) }
+    check(run.complete && run.accuracy == 100, "full Hanon follow-through")
+}
+
 print("PASS: \(checks) production core checks")

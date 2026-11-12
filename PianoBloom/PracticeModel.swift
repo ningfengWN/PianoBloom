@@ -29,6 +29,11 @@ final class PracticeModel: ObservableObject {
     @Published var sensitivity: Double { didSet { defaults.set(sensitivity, forKey: "sensitivity") } }
     let microphone = Microphone()
     private let defaults: UserDefaults
+    @Published private(set) var sectionStart: Int?
+    private var practiceNotes: [Int] {
+        guard let start = sectionStart else { return exercise.notes }
+        return Array(exercise.notes[start..<min(start + 8, exercise.notes.count)])
+    }
     private var gate = NoteGate()
     private var calibrator = CentralCCalibrator()
     private var calibrationDeadline: Double?
@@ -52,6 +57,11 @@ final class PracticeModel: ObservableObject {
     }
     func select(_ exercise: Exercise) {
         self.exercise = exercise
+        sectionStart = nil
+        restart()
+    }
+    func selectSection(_ start: Int?) {
+        sectionStart = start
         restart()
     }
     func changeMode(_ mode: Mode) {
@@ -61,9 +71,9 @@ final class PracticeModel: ObservableObject {
     }
     func restart() {
         pause()
-        progress = PracticeProgress(notes: exercise.notes)
+        progress = PracticeProgress(notes: practiceNotes)
         elapsed = 0; wrongNote = nil; latestResult = nil
-        feedback = "准备练习 \(exercise.title)，请弹 \(Music.name(exercise.notes[0]))。"
+        feedback = "准备练习 \(exercise.title)，请弹 \(Music.name(practiceNotes[0]))。"
     }
     func toggle() {
         if microphone.listening || microphone.requesting { pause(); return }
@@ -135,7 +145,7 @@ final class PracticeModel: ObservableObject {
     }
     private func finish() {
         let seconds = Int(elapsed + (startTime.map { Date().timeIntervalSince($0) } ?? 0))
-        let result = PracticeResult(title: exercise.title, date: Date(), count: progress.position, mistakes: progress.mistakes, accuracy: progress.accuracy, seconds: seconds)
+        let result = PracticeResult(title: exercise.title + (sectionStart.map { " · 第\($0 + 1)–\(min($0 + 8, exercise.notes.count))音" } ?? ""), date: Date(), count: progress.position, mistakes: progress.mistakes, accuracy: progress.accuracy, seconds: seconds)
         latestResult = result
         results.insert(result, at: 0); results = Array(results.prefix(30))
         if let data = try? JSONEncoder().encode(results) { defaults.set(data, forKey: "results") }

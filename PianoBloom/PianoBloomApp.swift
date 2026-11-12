@@ -106,8 +106,12 @@ struct PracticeView: View {
             Text("今天练什么").font(.headline)
             Spacer()
             Menu {
-                ForEach(Exercise.all) { exercise in
-                    Button(exercise.title) { model.select(exercise) }
+                ForEach(["入门旋律", "哈农 · 右手单音"], id: \.self) { group in
+                    Section(group) {
+                        ForEach(Exercise.all.filter { $0.group == group }) { exercise in
+                            Button(exercise.title) { model.select(exercise) }
+                        }
+                    }
                 }
             } label: {
                 HStack(spacing: 6) { Text(model.exercise.title); Image(systemName: "chevron.down").font(.caption.bold()) }
@@ -177,15 +181,26 @@ private struct ScoreCard: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(model.exercise.title).font(.title3.bold())
-                    Text("单音旋律 · 自由速度 · 弹对继续").font(.caption).foregroundStyle(.secondary)
+                    Text(model.exercise.subtitle).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Text("\(model.progress.position) / \(model.progress.notes.count)")
                     .font(.subheadline.monospacedDigit().bold()).foregroundStyle(Palette.green)
             }
+            if model.exercise.id.hasPrefix("hanon-") {
+                Menu {
+                    Button("整首（含反复）") { model.selectSection(nil) }
+                    ForEach(Array(stride(from: 0, to: model.exercise.notes.count, by: 8)), id: \.self) { start in
+                        Button("第\(start + 1)–\(min(start + 8, model.exercise.notes.count))音") { model.selectSection(start) }
+                    }
+                } label: {
+                    Label(model.sectionStart.map { "分段：第\($0 + 1)–\(min($0 + 8, model.exercise.notes.count))音" } ?? "整首练习 · 点击选择分段", systemImage: "music.note.list")
+                        .font(.subheadline)
+                }
+            }
             ScrollViewReader { proxy in
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 0) {
+                    LazyHStack(spacing: 0) {
                         Text("𝄞").font(.system(size: 65)).frame(width: 42, height: 132)
                         ForEach(Array(model.progress.notes.enumerated()), id: \.offset) { index, note in
                             ScoreNote(midi: note, state: index < model.progress.position ? .done : (index == model.progress.position ? (model.wrongNote == nil ? .current : .wrong) : .future))
@@ -199,7 +214,7 @@ private struct ScoreCard: View {
                 }.onChange(of: model.exercise.id) { _ in proxy.scrollTo(0, anchor: .leading) }
             }
             ProgressView(value: Double(model.progress.position), total: Double(model.progress.notes.count)).tint(Palette.green)
-            Text("这里只判断音符顺序，音符间距不表示演奏时值。").font(.caption2).foregroundStyle(.secondary)
+            Text("仅判断音符顺序；哈农按原谱反复展开，请单独弹右手。暂不评节奏、指法。").font(.caption2).foregroundStyle(.secondary)
         }.padding(18).background(.white, in: RoundedRectangle(cornerRadius: 24))
     }
 }
@@ -215,17 +230,19 @@ private struct ScoreNote: View {
         VStack(spacing: 0) {
             Canvas { context, size in
                 let x: CGFloat = size.width / 2
-                let bottom: CGFloat = 76
-                let y = bottom + 12 - CGFloat(Music.staffStep(midi)) * 6
+                let bottom: CGFloat = 100
+                let y = bottom + 8 - CGFloat(Music.staffStep(midi)) * 4
                 var staff = Path()
                 for row in 0..<5 {
-                    let lineY = bottom - CGFloat(row) * 12
+                    let lineY = bottom - CGFloat(row) * 8
                     staff.move(to: CGPoint(x: 0, y: lineY)); staff.addLine(to: CGPoint(x: size.width, y: lineY))
                 }
                 context.stroke(staff, with: .color(.gray.opacity(0.3)), lineWidth: 1)
-                if y >= bottom + 12 {
+                if y >= bottom + 8 || y <= bottom - 40 {
                     var ledger = Path()
-                    for lineY in stride(from: bottom + 12, through: y, by: 12) {
+                    let start = y >= bottom + 8 ? bottom + 8 : bottom - 40
+                    let step: CGFloat = y >= bottom + 8 ? 8 : -8
+                    for lineY in stride(from: start, through: y, by: step) {
                         ledger.move(to: CGPoint(x: x - 14, y: lineY)); ledger.addLine(to: CGPoint(x: x + 14, y: lineY))
                     }
                     context.stroke(ledger, with: .color(color), lineWidth: 1)
@@ -239,7 +256,7 @@ private struct ScoreNote: View {
                 if y >= 52 { stem.move(to: CGPoint(x: x + 8, y: y)); stem.addLine(to: CGPoint(x: x + 8, y: y - 31)) }
                 else { stem.move(to: CGPoint(x: x - 8, y: y)); stem.addLine(to: CGPoint(x: x - 8, y: y + 31)) }
                 context.stroke(stem, with: .color(color), lineWidth: 1.6)
-            }.frame(width: 58, height: 110)
+            }.frame(width: 58, height: 164)
             Text(Music.name(midi)).font(.caption.weight(state == .current ? .bold : .regular)).foregroundStyle(color)
         }.padding(.bottom, 8)
     }
@@ -335,6 +352,9 @@ private struct SettingsView: View {
                 Section("关于琴芽") {
                     Text("PianoBloom 1.0 · 单音练习版")
                     Text("本机处理音频；只保存校准值、灵敏度与最近 30 次完整练习记录。不保存录音。")
+                    Text("内置哈农第 1–20 首右手曲谱，可整首或每 8 音分段练习。")
+                    Text("曲谱改编自 Mutopia，Steve Taylor / Javier Ruiz-Alma，CC BY-SA 4.0。")
+                    Link("曲谱来源与授权", destination: URL(string: "https://www.mutopiaproject.org/ftp/HanonCL/virtuoso-pianist-pt1/")!)
                     Text("暂不支持双手和弦、踏板混音、导入曲谱和节奏评分。")
                 }
             }.navigationTitle("设置").toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
@@ -403,7 +423,7 @@ private struct HelpView: View {
                     Text("重新抬指、按键；App 会尝试根据新的击键音量变化判断。若余音导致卡住，请松开琴键等待片刻再弹，或者降低灵敏度。")
                 }
                 Section("识别不稳定？") {
-                    Text("靠近钢琴，关闭背景音乐和踏板，避免边弹边说话。一次只弹一个音。支持识别约 C3–C6；和弦、强混响及噪声可能导致误判。")
+                    Text("靠近钢琴，关闭背景音乐和踏板，避免边弹边说话。一次只弹一个音。支持识别约 B2–F6；和弦、强混响及噪声可能导致误判。")
                     Text("校准只能修正整台琴的整体音高偏移，不能代替钢琴调律。练习可使用默认标准音高，无需每次校准。")
                 }
                 Section("来电、切后台和换耳机") {
