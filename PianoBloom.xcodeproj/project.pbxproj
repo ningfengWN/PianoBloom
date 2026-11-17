@@ -25,6 +25,8 @@
 		00000000000000000000040A /* SolfegeScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000030A /* SolfegeScreen.swift */; };
 		00000000000000000000040B /* TextbookCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000030B /* TextbookCatalog.swift */; };
 		00000000000000000000040C /* TextbookLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000030C /* TextbookLibrary.swift */; };
+		00000000000000000000040D /* PhotoScoreCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000030D /* PhotoScoreCore.swift */; };
+		00000000000000000000040E /* PhotoScoreImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000030E /* PhotoScoreImport.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -48,6 +50,8 @@
 		00000000000000000000030A /* SolfegeScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SolfegeScreen.swift; sourceTree = "<group>"; };
 		00000000000000000000030B /* TextbookCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextbookCatalog.swift; sourceTree = "<group>"; };
 		00000000000000000000030C /* TextbookLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextbookLibrary.swift; sourceTree = "<group>"; };
+		00000000000000000000030D /* PhotoScoreCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoScoreCore.swift; sourceTree = "<group>"; };
+		00000000000000000000030E /* PhotoScoreImport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoScoreImport.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -79,6 +83,8 @@
 				000000000000000000000309 /* SolfegeModel.swift */,
 				00000000000000000000030A /* SolfegeScreen.swift */,
 				00000000000000000000030C /* TextbookLibrary.swift */,
+				00000000000000000000030E /* PhotoScoreImport.swift */,
+				00000000000000000000030D /* PhotoScoreCore.swift */,
 				00000000000000000000030B /* TextbookCatalog.swift */,
 				000000000000000000000304 /* GrandStaffView.swift */,
 				000000000000000000000303 /* MIDIInput.swift */,
@@ -172,6 +178,8 @@
 				000000000000000000000409 /* SolfegeModel.swift in Sources */,
 				00000000000000000000040A /* SolfegeScreen.swift in Sources */,
 				00000000000000000000040C /* TextbookLibrary.swift in Sources */,
+				00000000000000000000040E /* PhotoScoreImport.swift in Sources */,
+				00000000000000000000040D /* PhotoScoreCore.swift in Sources */,
 				00000000000000000000040B /* TextbookCatalog.swift in Sources */,
 				000000000000000000000404 /* GrandStaffView.swift in Sources */,
 				000000000000000000000403 /* MIDIInput.swift in Sources */,

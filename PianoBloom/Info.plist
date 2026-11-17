@@ -13,11 +13,13 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>2.9</string>
+	<string>3.0</string>
 	<key>CFBundleVersion</key>
-	<string>16</string>
+	<string>17</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>拍摄纸质钢琴谱，核对并录入你的练习曲谱。</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>使用麦克风识别钢琴音高，判断练习音符。基础识音在设备处理；选择 Onsets &amp; Velocities 时声音发送到你设置的 Mac，不保存录音。</string>
 	<key>NSLocalNetworkUsageDescription</key>

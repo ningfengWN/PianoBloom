@@ -36,6 +36,7 @@ struct GardenHome: View {
     @State private var settings = false
     @State private var history = false
     @State private var hanon = false
+    @State private var photoImport = false
     @State private var searchText = ""
     var body: some View {
         NavigationStack {
@@ -67,6 +68,7 @@ struct GardenHome: View {
             .sheet(isPresented: $freeListening) { FreeListeningView(model: model) }
             .sheet(isPresented: $settings) { ParentSettings(model: model) }
             .sheet(isPresented: $history) { HistoryView(model: model) }
+            .sheet(isPresented: $photoImport) { PhotoScoreImport(model: model) }
             .fullScreenCover(isPresented: $solfege) { SolfegeScreen(score: model.currentScore, bpm: model.bpm, countdownSound: model.countdownSound) }
         .fullScreenCover(isPresented: $performing) { PerformanceScreen(model: model) }
             .onAppear {
@@ -136,7 +138,7 @@ struct GardenHome: View {
         }.padding(22).frame(maxWidth: .infinity, alignment: .leading).background(.white, in: RoundedRectangle(cornerRadius: 26))
     }
     private var filteredScores: [PianoScore] {
-        PianoScore.all.filter { searchText.isEmpty ? $0.isHanon == hanon : $0.title.localizedCaseInsensitiveContains(searchText) }
+        model.availableScores.filter { searchText.isEmpty ? $0.isHanon == hanon : $0.title.localizedCaseInsensitiveContains(searchText) }
     }
     private var library: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -145,7 +147,7 @@ struct GardenHome: View {
                 Spacer()
                 Text("\(filteredScores.count) 首").font(.caption.bold()).foregroundStyle(Bloom.pink)
             }
-            NavigationLink { TextbookLibrary() } label: {
+            NavigationLink { TextbookLibrary(model: model) } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "books.vertical.fill").font(.title2)
                     VStack(alignment: .leading, spacing: 4) {
@@ -155,6 +157,10 @@ struct GardenHome: View {
                     Spacer(minLength: 0)
                     Image(systemName: "chevron.right")
                 }.foregroundStyle(Bloom.pink).padding(16).background(.white, in: RoundedRectangle(cornerRadius: 20))
+            }
+            Button { model.pause(); photoImport = true } label: {
+                Label("拍照录入 / 从相册录入曲谱", systemImage: "camera.viewfinder").font(.headline)
+                    .frame(maxWidth: .infinity).padding(14).background(.white, in: RoundedRectangle(cornerRadius: 18))
             }
             TextField("搜索曲名，如：小星星、哈农", text: $searchText)
                 .textFieldStyle(.roundedBorder).accessibilityLabel("搜索曲谱")
@@ -231,7 +237,7 @@ private struct InputSelector: View {
 }
 
 private enum PracticePanel: String, Identifiable {
-    case review, scoreSettings, metronome
+    case review, scoreSettings, metronome, original
     var id: String { rawValue }
 }
 
@@ -285,6 +291,8 @@ struct PerformanceScreen: View {
             Group {
                 switch selection {
                 case .review: PracticeLegend()
+                case .original:
+                    if let record = model.photoScores.first(where: { $0.id == model.score.id }) { OriginalPhotoScoreView(record: record) }
                 case .metronome: metronomeSettings.padding(24)
                 case .scoreSettings: ScrollView { scoreSettings.padding(24) }
                 }
@@ -410,6 +418,9 @@ struct PerformanceScreen: View {
                     toolButton("重来", icon: "arrow.counterclockwise", active: false) { model.restart() }
                     toolButton(model.demonstrating ? "停止" : "试听", icon: model.demonstrating ? "stop.fill" : "headphones", active: model.demonstrating) {
                         model.demonstrating ? model.pause() : model.demonstrate()
+                    }
+                    if model.score.id.hasPrefix("photo-") {
+                        toolButton("原谱", icon: "doc.richtext", active: false) { model.pause(); panel = .original }
                     }
                     toolButton("琴键", icon: "pianokeys", active: showKeyboard) { showKeyboard.toggle() }
                     toolButton("唱谱", icon: "music.mic", active: false) { model.setMetronome(false); model.pause(); solfege = true }

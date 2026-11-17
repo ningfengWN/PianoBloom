@@ -170,7 +170,7 @@ struct Performance {
     var lateCount: Int { judgments.values.filter { $0.grade == .late }.count }
     var pitchScore: Int {
         let pendingMistakes = waitForCorrect ? mistakePositions.filter { judgments[$0] == nil }.count : 0
-        let denominator = finished ? score.events.count : judgments.count + pendingMistakes
+        let denominator = finished ? score.events.filter { !$0.pitches(hands).isEmpty }.count : judgments.count + pendingMistakes
         let correctedMistakes = mistakePositions.filter { judgments[$0] != nil }.count
         let firstTryCorrect = waitForCorrect ? max(0, correctCount - correctedMistakes) : correctCount
         return Int((100 * Double(firstTryCorrect) / Double(max(1, denominator))).rounded())
@@ -181,7 +181,7 @@ struct Performance {
             guard let error = judgment.error, judgment.grade != .wrong && judgment.grade != .missed else { return value }
             return value + max(0, 1 - abs(error) / window)
         }
-        let denominator = finished ? score.events.count : judgments.count
+        let denominator = finished ? score.events.filter { !$0.pitches(hands).isEmpty }.count : judgments.count
         return Int((100 * sum / Double(max(1, denominator))).rounded())
     }
     init(score: PianoScore, hands: PracticeHands, style: PlayStyle, bpm: Double, waitForCorrect: Bool = false) {
@@ -192,6 +192,11 @@ struct Performance {
         if let pauseTime, let epoch { self.epoch = epoch + time - pauseTime; self.pauseTime = nil }
         else if epoch == nil { epoch = time + Double(score.beatsPerBar) * secondsPerBeat }
         pending = []; pendingTime = nil; suppressUntil = -Double.infinity
+        if style == .follow { skipSilentStaff() }
+    }
+    private mutating func skipSilentStaff() {
+        while position < score.events.count, score.events[position].pitches(hands).isEmpty { position += 1 }
+        if position == score.events.count { finished = true }
     }
     mutating func pause(at time: Double) {
         guard epoch != nil, pauseTime == nil else { return }
@@ -202,7 +207,7 @@ struct Performance {
     mutating func tick(at time: Double) {
         guard style == .rhythm, epoch != nil, pauseTime == nil, !finished else { return }
         while position < score.events.count, time > expectedTime(position) + window {
-            if judgments[position] == nil { judgments[position] = EventJudgment(grade: .missed, error: nil, heard: []) }
+            if !score.events[position].pitches(hands).isEmpty && judgments[position] == nil { judgments[position] = EventJudgment(grade: .missed, error: nil, heard: []) }
             position += 1; pending = []; pendingTime = nil
         }
         if position == score.events.count, time >= (epoch ?? time) + score.length * secondsPerBeat { finished = true }
@@ -229,7 +234,7 @@ struct Performance {
             if waitForCorrect { return .wrong }
             judgments[position] = EventJudgment(grade: .wrong, error: style == .rhythm ? error : nil, heard: heard)
             position += 1
-            if style == .follow { finished = position == score.events.count }
+            if style == .follow { skipSilentStaff() }
             return .wrong
         }
         guard pending == target else { return nil } // One hand alone never passes a two-hand event.
@@ -238,7 +243,7 @@ struct Performance {
         judgments[position] = EventJudgment(grade: grade, error: style == .rhythm ? onsetError : nil, heard: pending)
         pending = []; pendingTime = nil
         position += 1
-        if style == .follow { finished = position == score.events.count }
+        if style == .follow { skipSilentStaff() }
         return grade
     }
 }

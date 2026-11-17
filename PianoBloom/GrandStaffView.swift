@@ -47,8 +47,9 @@ struct GrandStaffView: View {
         }
         .onChange(of: model.performance.position) { position in
             guard !model.demonstrating, position > 0,
-                  let judgment = model.performance.judgments[position - 1], judgment.grade != .missed,
-                  let index = model.displayMap.globalIndex(position - 1) else { return }
+                  let played = model.performance.judgments.keys.filter({ $0 < position }).max(),
+                  let judgment = model.performance.judgments[played], judgment.grade != .missed,
+                  let index = model.displayMap.globalIndex(played) else { return }
             let pop = PlayedNotePop(index: index, wrong: judgment.grade == .wrong)
             pops.append(pop)
             // Keep quick passages bounded without cancelling other notes' animations.
@@ -114,6 +115,7 @@ struct StaffSystem: View {
     let running: Bool
     let pops: [PlayedNotePop]
     let popCompleted: (UUID) -> Void
+    var showsNoteNames = true
     private let ink = Color(red: 0.15, green: 0.11, blue: 0.17)
     private let pink = Color(red: 0.88, green: 0.31, blue: 0.53)
     private var end: Int { min(start + count, score.events.count) }
@@ -225,6 +227,9 @@ struct StaffSystem: View {
                     }
                     for note in notes {
                         let centerY = y(note, lower: lower)
+                        if score.id.hasPrefix("photo-"), [1,3,6,8,10].contains(note % 12) {
+                            text("♯", CGPoint(x: centerX - 13, y: centerY), .system(size: 14), paint)
+                        }
                         let staffTop = bottom - 40
                         if centerY >= bottom + gap || centerY <= staffTop - gap {
                             let first = centerY >= bottom + gap ? bottom + gap : staffTop - gap
@@ -297,7 +302,7 @@ struct StaffSystem: View {
                 context.stroke(final, with: .color(ink.opacity(0.4)), lineWidth: end == score.events.count ? 2 : 1)
             }
             // The current note's fixed-do label sits between the staves, away from noteheads.
-            if position >= start && position < end {
+            if showsNoteNames && position >= start && position < end {
                 let current = score.events[position]
                 let notes = current.pitches(hands).sorted()
                 let names = notes.map(Music.solfege).reduce(into: [String]()) { result, name in

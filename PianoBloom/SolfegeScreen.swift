@@ -17,8 +17,8 @@ struct SolfegeScreen: View {
             GeometryReader { geometry in
                 VStack(spacing: 12) {
                     Text(model.score.title).font(.title2.bold()).foregroundStyle(Bloom.ink)
-                    Picker("唱谱方式", selection: $model.activity) {
-                        ForEach(SolfegeActivity.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    Picker("唱谱模式", selection: $model.mode) {
+                        ForEach(SingingMode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                     }.pickerStyle(.segmented)
                     HStack(spacing: 12) {
                         Picker("声部", selection: $model.hand) {
@@ -35,8 +35,6 @@ struct SolfegeScreen: View {
                         Text("\(Int(model.bpm)) BPM").font(.caption.monospacedDigit())
                     }
                     HStack(spacing: 20) {
-                        Text(model.position < model.notes.count ? Solfege.name(model.notes[model.position].midi) : "✿")
-                            .font(.system(size: 46, weight: .bold, design: .rounded)).foregroundStyle(Bloom.pink)
                         VStack(alignment: .leading, spacing: 5) {
                             Text(model.feedback).font(.subheadline).foregroundStyle(Bloom.ink)
                             Text(model.activity == .listen ? "本机合成唱谱 · 非真人录音" : "仅评音高与起音 · 不评唱名发音，不要同时弹琴")
@@ -53,11 +51,11 @@ struct SolfegeScreen: View {
                     }.padding(16).background(.white, in: RoundedRectangle(cornerRadius: 20))
                     SolfegeScore(model: model, wide: geometry.size.width > 700)
                         .background(.white, in: RoundedRectangle(cornerRadius: 18))
-                    if model.activity == .sing, !model.assessment.results.isEmpty {
+                    if model.activity == .sing, !model.singingResults.isEmpty {
                         VStack(spacing: 4) {
-                            Text("音高 \(model.assessment.pitchScore) 分 · 节奏 \(model.assessment.rhythmScore.map { "\($0) 分" } ?? "待确认")")
+                            Text(model.mode == .follow ? "音高 \(model.singingPitchScore) 分" : "音高 \(model.singingPitchScore) 分 · 节奏 \(model.assessment.rhythmScore.map { "\($0) 分" } ?? "待确认")")
                                 .font(.headline).foregroundStyle(Bloom.ink)
-                            Text("已评 \(model.assessment.results.count)/\(model.notes.count) 个音 · 检测到 \(model.assessment.timingCount) 个清晰起音")
+                            Text(model.mode == .follow ? "识谱模式不评价节奏；唱对后继续。" : "已评 \(model.singingResults.count)/\(model.notes.count) 个音 · 检测到 \(model.assessment.timingCount) 个清晰起音")
                                 .font(.caption).foregroundStyle(Bloom.lilac)
                         }
                     }
@@ -65,11 +63,13 @@ struct SolfegeScreen: View {
                         Button("打开系统设置，允许麦克风") { if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) } }
                     }
                     if case let .failed(message) = microphone.state { Text(message).font(.caption).foregroundStyle(.orange) }
-                    Button { model.toggle() } label: {
-                        Label(model.preparing || model.running || microphone.requesting ? "停止" : (model.activity == .listen ? (model.preparationFailed ? "重试唱谱" : "听 App 唱谱") : "开始唱谱测评"),
-                              systemImage: model.running || model.preparing || microphone.requesting ? "stop.fill" : (model.activity == .listen ? "speaker.wave.2.fill" : "mic.fill"))
-                            .font(.headline).frame(maxWidth: .infinity, minHeight: 38)
-                    }.buttonStyle(.borderedProminent).clipShape(Capsule())
+                    HStack {
+                        Button("听示范") { model.listen() }.buttonStyle(.bordered)
+                        Button { if model.preparing || model.running || microphone.requesting { model.stop() } else { model.startPractice() } } label: {
+                            Label(model.preparing || model.running || microphone.requesting ? "停止" : "开始唱谱", systemImage: model.running ? "stop.fill" : "mic.fill")
+                                .font(.headline).frame(maxWidth: .infinity, minHeight: 38)
+                        }.buttonStyle(.borderedProminent).clipShape(Capsule())
+                    }
                     Text("和弦取所选声部最高音，唱单旋律；升降音按谱面音高示范。")
                         .font(.caption2).foregroundStyle(.secondary)
                 }.padding(geometry.size.width > 700 ? 22 : 12).background(Bloom.blush)
@@ -78,7 +78,7 @@ struct SolfegeScreen: View {
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { model.stop(); dismiss() } } }
         }
         .tint(Bloom.pink).interactiveDismissDisabled()
-        .onChange(of: model.activity) { _ in model.configure() }
+        .onChange(of: model.mode) { _ in model.configure() }
         .onChange(of: model.hand) { _ in model.configure() }
         .onChange(of: model.octave) { _ in model.configure() }
         .onChange(of: scenePhase) { phase in if phase != .active { model.stop() } }
@@ -104,7 +104,7 @@ private struct SolfegeScore: View {
                             flowMode: false, grayPositions: [], position: model.scorePosition,
                             notationScale: displayScale, hands: model.hand,
                             beat: model.elapsed * model.bpm / 60, running: model.running,
-                            pops: [], popCompleted: { _ in })
+                            pops: [], popCompleted: { _ in }, showsNoteNames: false)
                             .frame(height: 236 * displayScale).id(row)
                     }
                 }.padding(.horizontal, 8).padding(.vertical, 10)

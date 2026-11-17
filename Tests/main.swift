@@ -354,4 +354,39 @@ let gradeThreeA = examBook.entries.filter { $0.group == "3级 · A组" }
 check(gradeThreeA.map(\.title) == ["练习曲", "京剧小段", "快活的猎人"] && gradeThreeA.map(\.page) == [30,32,34] && gradeThreeA.first?.credit == "舒曼", "exam repertoire matches the photographed edition and page numbers")
 check(Set(examBook.entries.map(\.id)).count == examBook.entries.count, "identically named exam etudes remain distinct by grade and group")
 check(PianoTextbook.thompson.entries.first?.page == 4 && PianoTextbook.thompson.entries.last?.page == 43, "Thompson book order matches the provided contents")
+// Untimed singing waits for the right pitch and requires a fresh attack for repeated notes.
+let followNotes = SingingAssessment(score: singingScore, hand: .right, bpm: 60, octave: 0).notes
+var voiceFollow = SingingFollowAssessment(notes: followNotes)
+for index in 0..<6 { voiceFollow.accept(frequency: Music.frequency(62), rms: 0.1, time: 10 + Double(index) * 0.02, onset: 10) }
+check(voiceFollow.position == 0 && voiceFollow.results[0]?.grade == .wrong, "wrong singing turns red without advancing, even after a long rhythm delay")
+for index in 0..<6 { voiceFollow.accept(frequency: Music.frequency(60), rms: 0.1, time: 20 + Double(index) * 0.02, onset: 20) }
+check(voiceFollow.position == 1 && voiceFollow.results[0]?.timingError == nil, "corrected singing advances without grading lateness")
+let repeatVoiceScore = PianoScore(id: "voice-repeat", title: "repeat", detail: "", beatsPerBar: 4, events: [ScoreEvent(beat: 0, duration: 1, right: [60], left: []), ScoreEvent(beat: 1, duration: 1, right: [60], left: [])])
+var repeatedVoice = SingingFollowAssessment(notes: SingingAssessment(score: repeatVoiceScore, hand: .right, bpm: 60, octave: 0).notes)
+for index in 0..<50 { repeatedVoice.accept(frequency: Music.frequency(60), rms: 0.1, time: Double(index) * 0.02, onset: 0) }
+check(repeatedVoice.position == 1, "a single held syllable cannot pass repeated notes")
+repeatedVoice.accept(frequency: nil, rms: 0, time: 1.1, onset: nil)
+for index in 0..<6 { repeatedVoice.accept(frequency: Music.frequency(60), rms: 0.1, time: 1.2 + Double(index) * 0.02, onset: 1.2) }
+check(repeatedVoice.finished, "new syllable after a breath completes the repeated note")
+check(try! ScorePitchInput.read("C4 F#4 Bb3") == [60,66,58], "manual photo corrections preserve octaves and accidentals")
+let scanDraft = PhotoScoreDraft(title: "Photo", beatsPerBar: 4, beatUnit: 4, warnings: [], events: [PhotoScoreEvent(beat: 0, duration: 1, right: [], left: [48]), PhotoScoreEvent(beat: 1, duration: 1, right: [60], left: [])])
+let scanScore = try! scanDraft.score(id: "photo-test")
+var rightScan = Performance(score: scanScore, hands: .right, style: .follow, bpm: 60, waitForCorrect: true)
+rightScan.start(at: 0)
+check(rightScan.position == 1, "imported left-only attack does not block right-hand practice")
+_ = rightScan.play([60], at: 5)
+check(rightScan.finished && rightScan.pitchScore == 100, "other-staff rests are excluded from score denominators")
+var badScan = scanDraft
+badScan.events[1].beat = 0
+check((try? badScan.score(id: "bad")) == nil, "ambiguous duplicate attacks cannot be saved as a playable photo score")
+badScan = scanDraft; badScan.beatUnit = 8
+check((try? badScan.score(id: "bad")) == nil, "unsupported beat units are rejected rather than silently changed")
+let quotaResponse = Data(#"{"error":{"code":"insufficient_quota","message":"quota reached"}}"#.utf8)
+do { _ = try PhotoScoreResponse.decode(quotaResponse, status: 429); check(false, "quota must fail") }
+catch PhotoScoreError.quota { check(true, "quota response triggers persisted automatic recognition stop") }
+catch { check(false, "quota response must be distinguished from retryable errors") }
+let rateResponse = Data(#"{"error":{"code":"rate_limit_exceeded"}}"#.utf8)
+do { _ = try PhotoScoreResponse.decode(rateResponse, status: 429); check(false, "rate limit must end request") }
+catch PhotoScoreError.quota { check(false, "temporary rate limiting must not be labelled as an exhausted budget") }
+catch { check(true, "rate limit ends this request without automatic retry") }
 print("PASS: \(checks) production core checks")

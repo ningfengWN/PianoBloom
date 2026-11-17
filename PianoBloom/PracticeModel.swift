@@ -21,6 +21,13 @@ struct PracticeResult: Codable, Identifiable {
 
 enum PianoInput: String, CaseIterable { case microphone = "麦克风", midi = "USB MIDI" }
 final class PracticeModel: ObservableObject {
+    @Published private(set) var photoScores: [PhotoScoreRecord] = []
+    var availableScores: [PianoScore] { PianoScore.all + photoScores.compactMap { try? $0.draft.score(id: $0.id) } }
+    func savePhotoScore(_ record: PhotoScoreRecord, photos: [Data]) throws {
+        let score = try record.draft.score(id: record.id)
+        try PhotoScoreStore.save(record, photos: photos)
+        photoScores.append(record); select(score)
+    }
     @Published private(set) var score = PianoScore.all[0]
     @Published private(set) var hands: PracticeHands = .both
     @Published private(set) var style: PlayStyle = .follow
@@ -142,6 +149,7 @@ final class PracticeModel: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        _photoScores = Published(initialValue: PhotoScoreStore.load())
         countdownSound = defaults.object(forKey: "countdownSound") == nil ? true : defaults.bool(forKey: "countdownSound")
         recognitionEngine = RecognitionEngine(rawValue: defaults.string(forKey: "recognitionEngine") ?? "") ?? .basic
         modelAddress = defaults.string(forKey: "modelAddress") ?? ""

@@ -180,3 +180,39 @@ enum SolfegeVoiceRenderer {
         return output
     }
 }
+
+enum SingingMode: String, CaseIterable { case follow = "识谱模式", flow = "心流模式" }
+
+/// Untimed voice following. A held syllable cannot satisfy two repeated notes.
+struct SingingFollowAssessment {
+    let notes: [SingingNote]
+    private(set) var position = 0
+    private(set) var results: [Int: SingingResult] = [:]
+    private var candidate: Int?
+    private var stable = 0
+    private var lastAcceptedTime = -Double.infinity
+    private var needsAttack = false
+    private var quiet = true
+    var finished: Bool { position >= notes.count }
+    mutating func accept(frequency: Double?, rms: Double, time: Double, onset: Double?) {
+        guard !finished, time >= 0 else { return }
+        guard rms >= 0.003, let frequency, frequency.isFinite, (70...1400).contains(frequency) else {
+            candidate = nil; stable = 0; if rms < 0.003 { quiet = true }; return
+        }
+        if needsAttack {
+            guard quiet || (onset.map { $0 > lastAcceptedTime + 0.12 } ?? false) else { return }
+            needsAttack = false
+        }
+        guard time - lastAcceptedTime >= 0.15 else { return }
+        let pitch = Music.pitch(frequency, reference: Music.standardC)
+        let midi = Int(pitch.rounded())
+        if candidate == midi { stable += 1 } else { candidate = midi; stable = 1 }
+        guard stable >= 5 else { return }
+        let cents = (pitch - Double(notes[position].midi)) * 100
+        results[position] = SingingResult(cents: cents, timingError: nil)
+        guard abs(cents) <= 70 else { return }
+        let previous = notes[position].midi
+        position += 1; lastAcceptedTime = time; candidate = nil; stable = 0; quiet = false
+        needsAttack = !finished && notes[position].midi == previous
+    }
+}

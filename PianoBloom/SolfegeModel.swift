@@ -126,7 +126,9 @@ final class SolfegeModel: ObservableObject {
     let bpm: Double
     let countdownSound: Bool
     let microphone = Microphone()
-    @Published var activity: SolfegeActivity = .listen
+    @Published var activity: SolfegeActivity = .sing
+    @Published var mode: SingingMode = .follow
+    @Published private(set) var following: SingingFollowAssessment
     @Published var hand: PracticeHands = .right
     @Published var octave = 0
     @Published private(set) var preparing = false
@@ -147,13 +149,17 @@ final class SolfegeModel: ObservableObject {
     private var preparationJob: SolfegePreparationJob?
     var notes: [SingingNote] { assessment.notes }
     var position: Int {
-        if activity == .sing { return assessment.position }
+        if activity == .sing { return mode == .follow ? following.position : assessment.position }
         return notes.lastIndex(where: { $0.start <= elapsed }) ?? 0
     }
     var scorePosition: Int { completed && activity == .listen ? score.events.count : (position < notes.count ? notes[position].sourceIndex : score.events.count) }
     var countIn: Int? { running && activity == .sing && elapsed < 0 ? Int(ceil(-elapsed / (60 / bpm))) : nil }
+    var singingResults: [Int: SingingResult] { mode == .follow ? following.results : assessment.results }
+    var singingPitchScore: Int { singingResults.isEmpty ? 0 : singingResults.values.reduce(0) { $0 + $1.pitchScore } / singingResults.count }
+    func startPractice() { stop(); activity = .sing; toggle() }
+    func listen() { stop(); activity = .listen; toggle() }
     var judgments: [Int: EventJudgment] {
-        Dictionary(uniqueKeysWithValues: assessment.results.map { index, result in
+        Dictionary(uniqueKeysWithValues: singingResults.map { index, result in
             let note = notes[index]
             let heard: Set<Int> = result.cents.map { Set([Int((Double(note.midi) + $0 / 100).rounded())]) } ?? []
             return (note.sourceIndex, EventJudgment(grade: result.grade, error: result.timingError, heard: heard))
@@ -161,7 +167,9 @@ final class SolfegeModel: ObservableObject {
     }
     init(score: PianoScore, bpm: Double, countdownSound: Bool) {
         self.score = score; self.bpm = bpm; self.countdownSound = countdownSound
-        assessment = SingingAssessment(score: score, hand: .right, bpm: bpm, octave: 0)
+        let initialAssessment = SingingAssessment(score: score, hand: .right, bpm: bpm, octave: 0)
+        assessment = initialAssessment
+        following = SingingFollowAssessment(notes: initialAssessment.notes)
         microphone.recognitionEngine = .basic // Human voice uses single-pitch YIN, never the piano model.
         microphone.polyphonic = false
         microphone.onReady = { [weak self] in self?.startSingingClock() }
@@ -175,6 +183,7 @@ final class SolfegeModel: ObservableObject {
     func configure() {
         stop()
         assessment = SingingAssessment(score: score, hand: hand, bpm: bpm, octave: octave)
+        following = SingingFollowAssessment(notes: assessment.notes)
         completed = false; elapsed = 0
     }
     func toggle() {
@@ -296,8 +305,9 @@ final class SolfegeModel: ObservableObject {
                 }
             } else if let epoch = self.epoch {
                 self.elapsed = ProcessInfo.processInfo.systemUptime - epoch
-                self.assessment.tick(self.elapsed)
-                if self.assessment.position == self.notes.count {
+                if self.mode == .flow { self.assessment.tick(self.elapsed) }
+                else if self.elapsed >= 0, self.position < self.notes.count { self.elapsed = self.notes[self.position].start }
+                if self.position == self.notes.count {
                     self.stop(); self.completed = true; self.feedback = "唱完啦！看看音高和节奏，再练一次。"
                 }
             }
@@ -306,10 +316,17 @@ final class SolfegeModel: ObservableObject {
     private func receive(_ frame: PitchFrame) {
         guard running, activity == .sing, let epoch else { return }
         // Pitch describes the middle of the YIN window; onset describes the attack.
-        assessment.accept(frequency: frame.frequency, rms: frame.rms,
-                          time: frame.time - epoch - 0.064,
-                          onset: frame.onsetTime.map { $0 - epoch })
-        if elapsed >= 0 { feedback = "用自己的声音唱，不要同时弹琴或播放伴奏。" }
+        let time = frame.time - epoch - 0.064
+        if mode == .follow {
+            let previous = following.position
+            following.accept(frequency: frame.frequency, rms: frame.rms, time: time, onset: frame.onsetTime.map { $0 - epoch })
+            if following.finished { stop(); completed = true; feedback = "唱完啦！" }
+            else if following.position > previous { feedback = "对啦，继续下一个音。" }
+            else if following.results[following.position]?.grade == .wrong { feedback = "这个音还没唱准，试着调整音高。" }
+        } else {
+            assessment.accept(frequency: frame.frequency, rms: frame.rms, time: time, onset: frame.onsetTime.map { $0 - epoch })
+            if elapsed >= 0 { feedback = "保持连贯，结束后一起看音高和节奏。" }
+        }
     }
     private static func wav(_ values: [Float], rate: UInt32) -> Data {
         var data = Data()
