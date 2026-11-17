@@ -40,7 +40,9 @@ struct SingingAssessment {
         let errors = results.values.compactMap(\.timingError)
         // Do not award a convincing rhythm score from a single isolated syllable.
         guard errors.count >= max(1, (results.count + 1) / 2) else { return nil }
-        return Int((errors.reduce(0.0) { $0 + max(0, 100 * (1 - abs($1) / 0.35)) } / Double(errors.count)).rounded())
+        let scores: [Double] = errors.map { error in max(0.0, 100.0 * (1.0 - abs(error) / 0.35)) }
+        let average = scores.reduce(0.0, +) / Double(scores.count)
+        return Int(average.rounded())
     }
     init(score: PianoScore, hand: PracticeHands, bpm: Double, octave: Int) {
         let seconds = 60 / min(120, max(30, bpm))

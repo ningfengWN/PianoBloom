@@ -76,7 +76,7 @@ struct GardenHome: View {
                 }
                 #endif
             }
-            .onChange(of: scenePhase) { if $0 == .background { model.pause() } }
+            .onChange(of: scenePhase) { if $0 == .background { model.setMetronome(false); model.pause() } }
         }.tint(Bloom.pink)
     }
     private var welcome: some View {
@@ -118,7 +118,7 @@ struct GardenHome: View {
                 Stepper("\(Int(model.bpm)) BPM", value: Binding(get: { model.bpm }, set: { model.configure(bpm: $0) }), in: 30...120, step: 5)
                     .font(.subheadline.monospacedDigit())
             }.font(.subheadline)
-            Button { model.pause(); solfege = true } label: {
+            Button { model.setMetronome(false); model.pause(); solfege = true } label: {
                 Label("唱谱 · 听示范 / 我来唱", systemImage: "music.mic").font(.subheadline.bold())
             }
             InputSelector(model: model)
@@ -223,6 +223,8 @@ struct PerformanceScreen: View {
     @ObservedObject var model: PracticeModel
     @State private var showKeyboard = true
     @State private var solfege = false
+    @State private var showMetronome = false
+    @State private var tempoDraft = 60.0
     @State private var showReview = false
     @State private var showScoreSettings = false
     @ObservedObject private var microphone: Microphone
@@ -266,6 +268,7 @@ struct PerformanceScreen: View {
         .tint(Bloom.pink).interactiveDismissDisabled()
         .fullScreenCover(isPresented: $solfege) { SolfegeScreen(score: model.currentScore, bpm: model.bpm, countdownSound: model.countdownSound) }
         .sheet(isPresented: $showReview) { PracticeLegend() }
+        .popover(isPresented: $showMetronome) { metronomeSettings.padding(24).frame(minWidth: 280) }
         .popover(isPresented: $showScoreSettings) { scoreSettings.padding(24).frame(minWidth: 280) }
          .onAppear {
             UIApplication.shared.isIdleTimerDisabled = true
@@ -284,7 +287,7 @@ struct PerformanceScreen: View {
             }
             #endif
         }
-        .onDisappear { model.pause(); UIApplication.shared.isIdleTimerDisabled = false }
+        .onDisappear { model.setMetronome(false); model.pause(); UIApplication.shared.isIdleTimerDisabled = false }
     }
     private var handSelector: some View {
         Picker("选择演奏手", selection: Binding(get: { model.hands }, set: { model.selectHandsDuringPractice($0) })) {
@@ -379,15 +382,37 @@ struct PerformanceScreen: View {
                 }.frame(width: 50)
                 Spacer(minLength: 0)
             }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: wide ? 16 : 8) {
+            toolButton("节拍器", icon: "metronome.fill", active: model.metronomeEnabled) {
+                tempoDraft = model.bpm; showMetronome = true
+            }
             toolButton("重来", icon: "arrow.counterclockwise", active: false) { model.restart() }
             toolButton(model.demonstrating ? "停止" : "试听", icon: model.demonstrating ? "stop.fill" : "headphones", active: model.demonstrating) {
                 model.demonstrating ? model.pause() : model.demonstrate()
             }
             toolButton("琴键", icon: "pianokeys", active: showKeyboard) { showKeyboard.toggle() }
-            toolButton("唱谱", icon: "music.mic", active: false) { model.pause(); solfege = true }
+            toolButton("唱谱", icon: "music.mic", active: false) { model.setMetronome(false); model.pause(); solfege = true }
             toolButton("设置", icon: "gearshape.fill", active: false) { model.pause(); showScoreSettings = true }
-            if !wide { Spacer(minLength: 0) }
+                }
+            }.frame(maxWidth: wide ? 390 : .infinity)
         }.padding(.horizontal, wide ? 20 : 12).padding(.vertical, wide ? 8 : 6)
+    }
+    private var metronomeSettings: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Label("小兔节拍器", systemImage: "metronome.fill").font(.title2.bold())
+            Toggle("开启节拍器", isOn: Binding(get: { model.metronomeEnabled }, set: { model.setMetronome($0) }))
+            Text("\(Int(tempoDraft)) BPM · 每分钟拍数").font(.title3.bold()).foregroundStyle(Bloom.pink)
+            Slider(value: $tempoDraft, in: 30...120, step: 1) { editing in
+                if !editing { model.changePracticeTempo(tempoDraft) }
+            }.accessibilityLabel("节拍器速度")
+            Stepper("慢一点 / 快一点", value: Binding(get: { tempoDraft }, set: {
+                tempoDraft = $0; model.changePracticeTempo($0)
+            }), in: 30...120, step: 1)
+            Text("第一拍加重。调速会同步练习速度；弹奏中调速将从当前范围开头重新倒计时。").font(.caption).foregroundStyle(.secondary)
+            Text("暂停时停止，继续练习时自动跟拍。使用麦克风时建议戴耳机，减少节拍声干扰识音。").font(.caption).foregroundStyle(.secondary)
+            Button("完成") { showMetronome = false }.buttonStyle(.borderedProminent)
+        }.tint(Bloom.pink)
     }
     private func toolButton(_ title: String, icon: String, active: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {

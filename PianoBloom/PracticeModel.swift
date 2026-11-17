@@ -53,6 +53,32 @@ final class PracticeModel: ObservableObject {
     @Published var modelAddress: String { didSet { defaults.set(modelAddress, forKey: "modelAddress") } }
     @Published var modelToken: String { didSet { defaults.set(modelToken, forKey: "modelToken") } }
     private let countInSound = CountInSound()
+    private let metronomeSound = CountInSound()
+    @Published private(set) var metronomeEnabled = false
+    func setMetronome(_ enabled: Bool) {
+        metronomeEnabled = enabled
+        if enabled { countInSound.stop(); startMetronome() }
+        else { metronomeSound.stop() }
+    }
+    private func startMetronome() {
+        let seconds = 60 / bpm
+        let bar = Double(score.beatsPerBar)
+        let currentBeat = running ? performance.beat(at: ProcessInfo.processInfo.systemUptime) : 0
+        let phase = (currentBeat.truncatingRemainder(dividingBy: bar) + bar).truncatingRemainder(dividingBy: bar)
+        metronomeSound.play(beats: score.beatsPerBar, secondsPerBeat: seconds,
+                            remaining: (bar - phase) * seconds, looping: true)
+    }
+    func changePracticeTempo(_ value: Double) {
+        let value = min(120, max(30, value.rounded()))
+        guard value != bpm else { return }
+        let resume = running || microphone.requesting
+        let replayDemo = demonstrating
+        let enabled = metronomeEnabled
+        pause(); bpm = value; restart()
+        if resume { toggle() }
+        else if replayDemo { demonstrate() }
+        else if enabled { startMetronome() }
+    }
     @Published var voiceHints: Bool { didSet { defaults.set(voiceHints, forKey: "voiceHints") } }
     private let demonstrator = PianoDemonstrator()
     private var demoTimer: Timer?
@@ -284,7 +310,8 @@ final class PracticeModel: ObservableObject {
         guard !running else { return }
         now = ProcessInfo.processInfo.systemUptime
         performance.start(at: now); running = true; startedAt = now
-        if countdownSound {
+        if metronomeEnabled { startMetronome() }
+        else if countdownSound {
             countInSound.play(beats: score.beatsPerBar, secondsPerBeat: performance.secondsPerBeat,
                               remaining: max(0, (performance.epoch ?? now) - now))
         }
@@ -305,6 +332,7 @@ final class PracticeModel: ObservableObject {
         else if beat >= 0, feedback == "预备，一起数拍子。" { feedback = style == .follow ? "请弹亮起来的音符。" : "跟着节拍，让星星亮起来。" }
     }
     func pause() {
+        metronomeSound.stop()
         countInSound.stop()
         demonstrating = false; demoTimer?.invalidate(); demoTimer = nil; demoScore = nil; demonstrator.stop()
         now = ProcessInfo.processInfo.systemUptime
@@ -316,6 +344,7 @@ final class PracticeModel: ObservableObject {
         heard = []; gate.reset(); polyGate.reset()
     }
     private func didStop() {
+        metronomeSound.stop()
         countInSound.stop()
         if running {
             now = ProcessInfo.processInfo.systemUptime; performance.pause(at: pauseTime)

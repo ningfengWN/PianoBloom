@@ -3,7 +3,7 @@ import AVFoundation
 /// One pre-rendered bar keeps countdown clicks on the audio clock, not a UI timer.
 final class CountInSound {
     private var player: AVAudioPlayer?
-    func play(beats: Int, secondsPerBeat: Double, remaining: Double) {
+    func play(beats: Int, secondsPerBeat: Double, remaining: Double, looping: Bool = false) {
         stop()
         guard remaining > 0, secondsPerBeat > 0 else { return }
         let rate = 22050.0
@@ -14,7 +14,13 @@ final class CountInSound {
             let frequency = beat == beats - 1 ? 1320.0 : 880.0
             for i in 0..<Int(min(0.045, secondsPerBeat * 0.2) * rate) where start + i < samples.count {
                 let t = Double(i) / rate
-                samples[start + i] = Float(sin(2 * .pi * frequency * t) * exp(-t * 90) * min(1, t / 0.002) * 0.22)
+                if looping {
+                    // A short unpitched click is less likely to resemble a piano note.
+                    let noise = Double.random(in: -1...1)
+                    samples[start + i] = Float(noise * exp(-t * 240) * min(1, t / 0.001) * (beat == 0 ? 0.35 : 0.20))
+                } else {
+                    samples[start + i] = Float(sin(2 * .pi * frequency * t) * exp(-t * 90) * min(1, t / 0.002) * 0.22)
+                }
             }
         }
         var data = Data()
@@ -31,7 +37,8 @@ final class CountInSound {
             if session.category != .playAndRecord { try session.setCategory(.playback, mode: .default) }
             try session.setActive(true)
             player = try AVAudioPlayer(data: data)
-            player?.currentTime = max(0, duration - remaining)
+            player?.numberOfLoops = looping ? -1 : 0
+            player?.currentTime = min(duration - 1 / rate, max(0, duration - remaining))
             player?.prepareToPlay(); player?.play()
         } catch { player = nil } // Visual countdown is retained if output is unavailable.
     }
