@@ -90,13 +90,15 @@ struct SolfegeScreen: View {
 private struct SolfegeScore: View {
     @ObservedObject var model: SolfegeModel
     let wide: Bool
-    private var perLine: Int { wide ? 8 : 4 }
+    private var layout: ScoreRowLayout { ScoreRowLayout(score: model.score) }
+    private var focusRow: Int { layout.row(forEvent: model.scorePosition) }
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 10) {
-                    ForEach(0..<((model.score.events.count + perLine - 1) / perLine), id: \.self) { row in
-                        StaffSystem(score: model.score, start: row * perLine, count: perLine,
+                    ForEach(layout.rows.indices, id: \.self) { row in
+                        let line = layout.rows[row]
+                        StaffSystem(score: model.score, start: line.events.lowerBound, count: line.events.count, measureRange: line.bars,
                             judgments: model.judgments, mistakePositions: [], style: .follow,
                             flowMode: false, grayPositions: [], position: model.scorePosition,
                             notationScale: wide ? 1.35 : 1.05, hands: model.hand,
@@ -106,7 +108,7 @@ private struct SolfegeScore: View {
                     }
                 }.padding(.horizontal, 8).padding(.vertical, 10)
             }
-            .onChange(of: model.scorePosition / perLine) { row in
+            .onChange(of: focusRow) { row in
                 if model.running { withAnimation { proxy.scrollTo(row, anchor: .top) } }
             }
             .onChange(of: model.activity) { _ in proxy.scrollTo(0, anchor: .top) }

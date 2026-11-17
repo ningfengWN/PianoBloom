@@ -4,14 +4,15 @@ struct GrandStaffView: View {
     @ObservedObject var model: PracticeModel
     let wide: Bool
     @State private var pops: [PlayedNotePop] = []
-    private var perLine: Int { wide ? (model.score.isHanon && model.notationScale < 1.5 ? 16 : 8) : 4 }
-    private var lineCount: Int { (model.score.events.count + perLine - 1) / perLine }
+    private var layout: ScoreRowLayout { ScoreRowLayout(score: model.score) }
+    private var focusRow: Int { layout.row(forEvent: model.notationFocus) }
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: true) {
                 LazyVStack(spacing: 12) {
-                    ForEach(0..<lineCount, id: \.self) { row in
-                        StaffSystem(score: model.score, start: row * perLine, count: perLine,
+                    ForEach(layout.rows.indices, id: \.self) { row in
+                        let line = layout.rows[row]
+                        StaffSystem(score: model.score, start: line.events.lowerBound, count: line.events.count, measureRange: line.bars,
                                     judgments: model.displayMap.judgments(model.performance.judgments),
                                     mistakePositions: model.displayMap.positions(model.performance.mistakePositions),
                                     style: model.style, flowMode: model.practiceMode == .flow,
@@ -19,7 +20,7 @@ struct GrandStaffView: View {
                                     position: model.notationPosition,
                                     notationScale: model.notationScale, hands: model.hands,
                                     beat: model.notationBeat, running: model.running || model.demonstrating,
-                                    pops: pops.filter { $0.index / perLine == row },
+                                    pops: pops.filter { line.events.contains($0.index) },
                                     popCompleted: { id in pops.removeAll { $0.id == id } })
                             .frame(height: 236 * model.notationScale)
                             .id(row)
@@ -27,20 +28,20 @@ struct GrandStaffView: View {
                     }
                 }.padding(.horizontal, wide ? 28 : 8).padding(.vertical, 12)
             }
-            .onAppear { proxy.scrollTo(model.notationFocus / perLine, anchor: .top) }
-            .onChange(of: model.notationFocus / perLine) { row in
+            .onAppear { proxy.scrollTo(focusRow, anchor: .top) }
+            .onChange(of: focusRow) { row in
                 guard model.running || model.demonstrating else { return }
                 withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(row, anchor: .top) }
             }
             .onChange(of: model.performance.epoch) { _ in
                 if model.performance.position == 0 {
                     pops = []
-                    proxy.scrollTo(model.notationFocus / perLine, anchor: .top)
+                    proxy.scrollTo(focusRow, anchor: .top)
                 }
             }
             .onChange(of: model.sectionBar) { _ in
                 pops = []
-                proxy.scrollTo(model.notationFocus / perLine, anchor: .top)
+                proxy.scrollTo(focusRow, anchor: .top)
             }
         }
         .onChange(of: model.performance.position) { position in
@@ -99,6 +100,7 @@ struct StaffSystem: View {
     let score: PianoScore
     let start: Int
     let count: Int
+    let measureRange: Range<Int>
     let judgments: [Int: EventJudgment]
     let mistakePositions: Set<Int>
     let style: PlayStyle
@@ -121,9 +123,8 @@ struct StaffSystem: View {
             let size = CGSize(width: canvasSize.width / scale, height: canvasSize.height / scale)
             let left: CGFloat = 78, right: CGFloat = size.width - 16
             let topBottom: CGFloat = 88, lowBottom: CGFloat = 188, gap: CGFloat = 10
-            let firstBeat = score.events[start].beat
-            let last = score.events[end - 1]
-            let endBeat = last.beat + last.duration
+            let firstBeat = Double(measureRange.lowerBound * score.beatsPerBar)
+            let endBeat = Double(measureRange.upperBound * score.beatsPerBar)
             let beatWidth = (right - left) / CGFloat(max(1, endBeat - firstBeat))
             func x(_ value: Double) -> CGFloat { left + CGFloat(value - firstBeat) * beatWidth + min(12, beatWidth * 0.08) }
             let leftPitches = score.events[start..<end].flatMap(\.left).sorted()
@@ -330,9 +331,9 @@ struct StaffSystem: View {
     private func popPoint(_ index: Int, width: CGFloat) -> CGPoint {
         let scale = CGFloat(notationScale)
         let left: CGFloat = 78, right = width / scale - 16
-        let first = score.events[start].beat
-        let last = score.events[end - 1]
-        let beatWidth = (right - left) / CGFloat(max(1, last.beat + last.duration - first))
+        let first = Double(measureRange.lowerBound * score.beatsPerBar)
+        let endBeat = Double(measureRange.upperBound * score.beatsPerBar)
+        let beatWidth = (right - left) / CGFloat(max(1, endBeat - first))
         let event = score.events[index]
         let x = left + CGFloat(event.beat - first) * beatWidth + min(12, beatWidth * 0.08)
         // Same anchor as the permanent blossom; the popup rises into the row's top margin.

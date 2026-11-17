@@ -80,6 +80,30 @@ struct ScoreDisplayMap {
     func positions(_ local: Set<Int>) -> Set<Int> { Set(local.compactMap(globalIndex)) }
 }
 
+/// Row boundaries follow measures, independent of the number or duration of notes.
+struct ScoreRowLayout {
+    struct Row {
+        let bars: Range<Int>
+        let events: Range<Int>
+    }
+    let rows: [Row]
+    init(score: PianoScore) {
+        let totalBars = Int(ceil(score.length / Double(score.beatsPerBar)))
+        var result: [Row] = []
+        var index = 0
+        for firstBar in stride(from: 0, to: totalBars, by: 3) {
+            let lastBar = min(totalBars, firstBar + 3)
+            let start = index
+            while index < score.events.count, score.events[index].beat < Double(lastBar * score.beatsPerBar) { index += 1 }
+            result.append(Row(bars: firstBar..<lastBar, events: start..<index))
+        }
+        rows = result
+    }
+    func row(forEvent index: Int) -> Int {
+        rows.firstIndex(where: { $0.events.contains(index) }) ?? max(0, rows.count - 1)
+    }
+}
+
 enum NoteGrade: String { case perfect, early, late, wrong, missed }
 struct EventJudgment {
     let grade: NoteGrade

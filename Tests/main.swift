@@ -334,4 +334,18 @@ cancelledSong.cancel()
 check(SolfegeVoiceRenderer.render(voiceSource, midi: 60, duration: 0.6, shouldCancel: { cancelledSong.isCancelled }) == nil, "stopped preparation cannot keep rendering after exit or retry")
 var renderProbes = 0
 check(SolfegeVoiceRenderer.render(voiceSource, midi: 60, duration: 0.6, shouldCancel: { renderProbes += 1; return renderProbes > 4 }) == nil, "cancellation interrupts in-progress pitch analysis")
+// Three-measure rows retain every event, including dense eighth notes and partial endings.
+for score in PianoScore.all {
+    let layout = ScoreRowLayout(score: score)
+    check(layout.rows.flatMap { Array($0.events) } == Array(score.events.indices), "three-bar rows preserve every note in \(score.id)")
+    for (index, row) in layout.rows.enumerated() {
+        check(row.bars.count <= 3 && (index == layout.rows.count - 1 || row.bars.count == 3), "only the final row may contain fewer than three measures")
+        for event in row.events {
+            check(layout.row(forEvent: event) == index, "cursor and pop animation use the measure-based row")
+            let beat = score.events[event].beat
+            check(beat >= Double(row.bars.lowerBound * score.beatsPerBar) && beat < Double(row.bars.upperBound * score.beatsPerBar), "a bar is never split because of note density")
+        }
+    }
+}
+check(ScoreRowLayout(score: PianoScore.starters[0]).rows[0].events.count != ScoreRowLayout(score: HanonScores.all[0]).rows[0].events.count, "same three measures allow different note counts")
 print("PASS: \(checks) production core checks")
