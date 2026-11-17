@@ -384,18 +384,18 @@ struct PerformanceScreen: View {
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: wide ? 16 : 8) {
-            toolButton("节拍器", icon: "metronome.fill", active: model.metronomeEnabled) {
-                tempoDraft = model.bpm; showMetronome = true
-            }
-            toolButton("重来", icon: "arrow.counterclockwise", active: false) { model.restart() }
-            toolButton(model.demonstrating ? "停止" : "试听", icon: model.demonstrating ? "stop.fill" : "headphones", active: model.demonstrating) {
-                model.demonstrating ? model.pause() : model.demonstrate()
-            }
-            toolButton("琴键", icon: "pianokeys", active: showKeyboard) { showKeyboard.toggle() }
-            toolButton("唱谱", icon: "music.mic", active: false) { model.setMetronome(false); model.pause(); solfege = true }
-            toolButton("设置", icon: "gearshape.fill", active: false) { model.pause(); showScoreSettings = true }
+                    toolButton("节拍器", icon: "metronome.fill", active: model.metronomeEnabled) {
+                        tempoDraft = model.bpm; showMetronome = true
+                    }
+                    toolButton("重来", icon: "arrow.counterclockwise", active: false) { model.restart() }
+                    toolButton(model.demonstrating ? "停止" : "试听", icon: model.demonstrating ? "stop.fill" : "headphones", active: model.demonstrating) {
+                        model.demonstrating ? model.pause() : model.demonstrate()
+                    }
+                    toolButton("琴键", icon: "pianokeys", active: showKeyboard) { showKeyboard.toggle() }
+                    toolButton("唱谱", icon: "music.mic", active: false) { model.setMetronome(false); model.pause(); solfege = true }
+                    toolButton("设置", icon: "gearshape.fill", active: false) { model.pause(); showScoreSettings = true }
                 }
-            }.frame(maxWidth: wide ? 390 : .infinity)
+            }.frame(maxWidth: wide ? 390 : .infinity).frame(height: 58)
         }.padding(.horizontal, wide ? 20 : 12).padding(.vertical, wide ? 8 : 6)
     }
     private var metronomeSettings: some View {
