@@ -186,6 +186,7 @@ enum SingingMode: String, CaseIterable { case follow = "识谱模式", flow = "�
 /// Untimed voice following. A held syllable cannot satisfy two repeated notes.
 struct SingingFollowAssessment {
     let notes: [SingingNote]
+    init(notes: [SingingNote]) { self.notes = notes }
     private(set) var position = 0
     private(set) var results: [Int: SingingResult] = [:]
     private var candidate: Int?

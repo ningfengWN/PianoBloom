@@ -3,15 +3,19 @@ import UIKit
 
 struct SolfegeScreen: View {
     @StateObject private var model: SolfegeModel
+    init(score: PianoScore, bpm: Double, countdownSound: Bool) {
+        _model = StateObject(wrappedValue: SolfegeModel(score: score, bpm: bpm, countdownSound: countdownSound))
+    }
+    var body: some View { SolfegeContent(model: model) }
+}
+
+private struct SolfegeContent: View {
+    @ObservedObject var model: SolfegeModel
     @ObservedObject private var microphone: Microphone
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
-    init(score: PianoScore, bpm: Double, countdownSound: Bool) {
-        let model = SolfegeModel(score: score, bpm: bpm, countdownSound: countdownSound)
-        _model = StateObject(wrappedValue: model)
-        microphone = model.microphone
-    }
+    init(model: SolfegeModel) { self.model = model; microphone = model.microphone }
     var body: some View {
         NavigationStack {
             GeometryReader { geometry in
