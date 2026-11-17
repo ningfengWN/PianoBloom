@@ -4,6 +4,7 @@ struct GrandStaffView: View {
     @ObservedObject var model: PracticeModel
     let wide: Bool
     @State private var pops: [PlayedNotePop] = []
+    private var displayScale: Double { model.notationScale * 1.16 }
     private var layout: ScoreRowLayout { ScoreRowLayout(score: model.score) }
     private var focusRow: Int { layout.row(forEvent: model.notationFocus) }
     var body: some View {
@@ -18,15 +19,15 @@ struct GrandStaffView: View {
                                     style: model.style, flowMode: model.practiceMode == .flow,
                                     grayPositions: model.displayMap.positions(model.practiceMode == .flow ? model.flowReview.grayPositions : []),
                                     position: model.notationPosition,
-                                    notationScale: model.notationScale, hands: model.hands,
+                                    notationScale: displayScale, hands: model.hands,
                                     beat: model.notationBeat, running: model.running || model.demonstrating,
                                     pops: pops.filter { line.events.contains($0.index) },
                                     popCompleted: { id in pops.removeAll { $0.id == id } })
-                            .frame(height: 236 * model.notationScale)
+                            .frame(height: 236 * displayScale)
                             .id(row)
                             .accessibilityLabel("第 \(row + 1) 行双手琴谱，可上下滑动查看整曲")
                     }
-                }.padding(.horizontal, wide ? 28 : 8).padding(.vertical, 12)
+                }.padding(.horizontal, wide ? 16 : 6).padding(.vertical, 12)
             }
             .onAppear { proxy.scrollTo(focusRow, anchor: .top) }
             .onChange(of: focusRow) { row in
@@ -183,7 +184,7 @@ struct StaffSystem: View {
                     staff.move(to: CGPoint(x: 28, y: bottom - CGFloat(line) * gap))
                     staff.addLine(to: CGPoint(x: right, y: bottom - CGFloat(line) * gap))
                 }
-                context.stroke(staff, with: .color(ink.opacity(0.70 * opacity)), lineWidth: 1.15)
+                context.stroke(staff, with: .color(ink.opacity(0.88 * opacity)), lineWidth: 1.35)
                 text(lower && !lowTreble ? "𝄢" : "𝄞", CGPoint(x: 40, y: bottom - 20), .system(size: lower && !lowTreble ? 32 : 46), ink.opacity(opacity))
                 text(lower ? "左手" : "右手", CGPoint(x: 4, y: bottom - 20), .system(size: 9, weight: .medium), pink.opacity(opacity), anchor: .leading)
                 if start == 0 {
@@ -232,7 +233,7 @@ struct StaffSystem: View {
                             for line in stride(from: first, through: centerY, by: step) {
                                 ledger.move(to: CGPoint(x: centerX - 9, y: line)); ledger.addLine(to: CGPoint(x: centerX + 9, y: line))
                             }
-                            context.stroke(ledger, with: .color(paint), lineWidth: 1.1)
+                            context.stroke(ledger, with: .color(paint), lineWidth: 1.3)
                         }
                         let head = Path(ellipseIn: CGRect(x: centerX - 5.5, y: centerY - 3.6, width: 11, height: 7.2))
                         if event.duration >= 2 { context.stroke(head, with: .color(paint), lineWidth: 1.8) }
@@ -268,7 +269,7 @@ struct StaffSystem: View {
                     let stemY = stem.head, up = stem.up, stemX = stem.x, stemEnd = stem.end
                     if event.duration < 4 {
                         var stem = Path(); stem.move(to: CGPoint(x: stemX, y: stemY)); stem.addLine(to: CGPoint(x: stemX, y: stemEnd))
-                        context.stroke(stem, with: .color(paint), lineWidth: 1.6)
+                        context.stroke(stem, with: .color(paint), lineWidth: 1.75)
                     }
                     if event.duration <= 0.5 {
                         let nextIndex = index + 1

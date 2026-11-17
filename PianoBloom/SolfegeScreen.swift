@@ -90,6 +90,7 @@ struct SolfegeScreen: View {
 private struct SolfegeScore: View {
     @ObservedObject var model: SolfegeModel
     let wide: Bool
+    private var displayScale: Double { (wide ? 1.35 : 1.05) * 1.16 }
     private var layout: ScoreRowLayout { ScoreRowLayout(score: model.score) }
     private var focusRow: Int { layout.row(forEvent: model.scorePosition) }
     var body: some View {
@@ -101,10 +102,10 @@ private struct SolfegeScore: View {
                         StaffSystem(score: model.score, start: line.events.lowerBound, count: line.events.count, measureRange: line.bars,
                             judgments: model.judgments, mistakePositions: [], style: .follow,
                             flowMode: false, grayPositions: [], position: model.scorePosition,
-                            notationScale: wide ? 1.35 : 1.05, hands: model.hand,
+                            notationScale: displayScale, hands: model.hand,
                             beat: model.elapsed * model.bpm / 60, running: model.running,
                             pops: [], popCompleted: { _ in })
-                            .frame(height: wide ? 319 : 248).id(row)
+                            .frame(height: 236 * displayScale).id(row)
                     }
                 }.padding(.horizontal, 8).padding(.vertical, 10)
             }

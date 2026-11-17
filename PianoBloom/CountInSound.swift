@@ -12,12 +12,12 @@ final class CountInSound {
         for beat in 0..<beats {
             let start = Int(Double(beat) * secondsPerBeat * rate)
             let frequency = beat == beats - 1 ? 1320.0 : 880.0
-            for i in 0..<Int(min(0.045, secondsPerBeat * 0.2) * rate) where start + i < samples.count {
+            for i in 0..<Int(min(looping ? 0.080 : 0.045, secondsPerBeat * 0.2) * rate) where start + i < samples.count {
                 let t = Double(i) / rate
                 if looping {
-                    // A short unpitched click is less likely to resemble a piano note.
+                    // An unpitched click with a longer body remains audible over piano practice.
                     let noise = Double.random(in: -1...1)
-                    samples[start + i] = Float(noise * exp(-t * 240) * min(1, t / 0.001) * (beat == 0 ? 0.35 : 0.20))
+                    samples[start + i] = Float(noise * exp(-t * 80) * min(1, t / 0.0007) * (beat == 0 ? 0.90 : 0.62))
                 } else {
                     samples[start + i] = Float(sin(2 * .pi * frequency * t) * exp(-t * 90) * min(1, t / 0.002) * 0.22)
                 }
@@ -37,6 +37,7 @@ final class CountInSound {
             if session.category != .playAndRecord { try session.setCategory(.playback, mode: .default) }
             try session.setActive(true)
             player = try AVAudioPlayer(data: data)
+            player?.volume = 1
             player?.numberOfLoops = looping ? -1 : 0
             player?.currentTime = min(duration - 1 / rate, max(0, duration - remaining))
             player?.prepareToPlay(); player?.play()
