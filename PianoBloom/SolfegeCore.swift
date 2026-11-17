@@ -81,6 +81,19 @@ struct SingingAssessment {
     }
 }
 
+/// Shared deadline/cancellation flag for the main UI and background renderer.
+final class SolfegePreparationJob {
+    private let lock = NSLock()
+    private var cancelled = false
+    private let deadline: Double
+    init(timeout: Double) { deadline = ProcessInfo.processInfo.systemUptime + timeout }
+    func cancel() { lock.lock(); cancelled = true; lock.unlock() }
+    var isCancelled: Bool {
+        lock.lock(); let stopped = cancelled; lock.unlock()
+        return stopped || ProcessInfo.processInfo.systemUptime >= deadline
+    }
+}
+
 struct SolfegeVoiceSample {
     let samples: [Float]
     let sampleRate: Double
@@ -89,8 +102,8 @@ struct SolfegeVoiceSample {
 /// Pitch-synchronous overlap-add: system speech supplies syllables and formants;
 /// the voiced grain is repeated at the score's target period and stretched to its duration.
 enum SolfegeVoiceRenderer {
-    static func render(_ source: SolfegeVoiceSample, midi: Int, duration: Double, outputRate: Double = 16000) -> [Float]? {
-        guard duration > 0, duration <= 600, (0...127).contains(midi), source.sampleRate > 0, source.sampleRate.isFinite, !source.samples.isEmpty else { return nil }
+    static func render(_ source: SolfegeVoiceSample, midi: Int, duration: Double, outputRate: Double = 16000, shouldCancel: () -> Bool = { false }) -> [Float]? {
+        guard !shouldCancel(), duration > 0, duration <= 600, (0...127).contains(midi), source.sampleRate > 0, source.sampleRate.isFinite, !source.samples.isEmpty else { return nil }
         let input = source.samples
         let peak = input.map { abs($0) }.max() ?? 0
         guard peak > 0.001, let lo = input.firstIndex(where: { abs($0) > peak * 0.025 }),
@@ -98,7 +111,13 @@ enum SolfegeVoiceRenderer {
         let trimmed = Array(input[lo...hi])
         var candidates: [(Int, Double, Double)] = []
         let size = min(2048, trimmed.count - 2)
-        for center in stride(from: max(size / 2, trimmed.count / 3), to: trimmed.count - size / 2, by: max(1, size / 4)) {
+        let firstCenter = max(size / 2, trimmed.count / 3)
+        let lastCenter = trimmed.count - size / 2 - 1
+        guard lastCenter >= firstCenter else { return nil }
+        // Bound expensive YIN work, especially for 44.1/48 kHz system voices in Debug builds.
+        let centers = Set((0..<8).map { firstCenter + (lastCenter - firstCenter) * $0 / 7 }).sorted()
+        for center in centers {
+            guard !shouldCancel() else { return nil }
             let block = Array(trimmed[(center - size / 2)..<(center + size / 2)])
             let frame = PitchDetector.analyze(block, sampleRate: source.sampleRate, time: 0)
             if let f = frame.frequency, (90...650).contains(f) { candidates.append((center, f, frame.rms)) }
@@ -115,6 +134,7 @@ enum SolfegeVoiceRenderer {
         let grainRadius = period * outputRate / source.sampleRate
         var center = 0.0
         while center < Double(output.count) + grainRadius {
+            guard !shouldCancel() else { return nil }
             let left = max(0, Int(floor(center - grainRadius))), right = min(output.count - 1, Int(ceil(center + grainRadius)))
             if left <= right {
                 for index in left...right {

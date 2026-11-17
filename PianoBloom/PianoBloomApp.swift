@@ -219,14 +219,17 @@ private struct InputSelector: View {
     }
 }
 
+private enum PracticePanel: String, Identifiable {
+    case review, scoreSettings, metronome
+    var id: String { rawValue }
+}
+
 struct PerformanceScreen: View {
     @ObservedObject var model: PracticeModel
     @State private var showKeyboard = true
     @State private var solfege = false
-    @State private var showMetronome = false
+    @State private var panel: PracticePanel?
     @State private var tempoDraft = 60.0
-    @State private var showReview = false
-    @State private var showScoreSettings = false
     @ObservedObject private var microphone: Microphone
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
@@ -267,9 +270,15 @@ struct PerformanceScreen: View {
         }
         .tint(Bloom.pink).interactiveDismissDisabled()
         .fullScreenCover(isPresented: $solfege) { SolfegeScreen(score: model.currentScore, bpm: model.bpm, countdownSound: model.countdownSound) }
-        .sheet(isPresented: $showReview) { PracticeLegend() }
-        .popover(isPresented: $showMetronome) { metronomeSettings.padding(24).frame(minWidth: 280) }
-        .popover(isPresented: $showScoreSettings) { scoreSettings.padding(24).frame(minWidth: 280) }
+        .sheet(item: $panel) { selection in
+            Group {
+                switch selection {
+                case .review: PracticeLegend()
+                case .metronome: metronomeSettings.padding(24)
+                case .scoreSettings: ScrollView { scoreSettings.padding(24) }
+                }
+            }.presentationDetents([.medium, .large])
+        }
          .onAppear {
             UIApplication.shared.isIdleTimerDisabled = true
             #if DEBUG
@@ -355,7 +364,7 @@ struct PerformanceScreen: View {
             Toggle("倒计时声音提示", isOn: $model.countdownSound)
             Toggle("小兔语音提示", isOn: $model.voiceHints)
             Button("听听怎么练") { model.speakInstruction() }
-            Button("音符颜色说明") { showScoreSettings = false; showReview = true }
+            Button("音符颜色说明") { panel = .review }
             Text(model.practiceMode.instruction)
                 .font(.subheadline.bold()).foregroundStyle(Bloom.pink)
             Text("绿色：正确；红色：错音/漏音；心流中灰色：连续卡顿、连续错音较多或未演奏。红色重影表示抢拍/拖拍；粉色括号为不熟练区域。")
@@ -385,7 +394,7 @@ struct PerformanceScreen: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: wide ? 16 : 8) {
                     toolButton("节拍器", icon: "metronome.fill", active: model.metronomeEnabled) {
-                        tempoDraft = model.bpm; showMetronome = true
+                        tempoDraft = model.bpm; model.setMetronome(true); panel = .metronome
                     }
                     toolButton("重来", icon: "arrow.counterclockwise", active: false) { model.restart() }
                     toolButton(model.demonstrating ? "停止" : "试听", icon: model.demonstrating ? "stop.fill" : "headphones", active: model.demonstrating) {
@@ -393,7 +402,7 @@ struct PerformanceScreen: View {
                     }
                     toolButton("琴键", icon: "pianokeys", active: showKeyboard) { showKeyboard.toggle() }
                     toolButton("唱谱", icon: "music.mic", active: false) { model.setMetronome(false); model.pause(); solfege = true }
-                    toolButton("设置", icon: "gearshape.fill", active: false) { model.pause(); showScoreSettings = true }
+                    toolButton("设置", icon: "gearshape.fill", active: false) { model.pause(); panel = .scoreSettings }
                 }
             }.frame(maxWidth: wide ? 390 : .infinity).frame(height: 58)
         }.padding(.horizontal, wide ? 20 : 12).padding(.vertical, wide ? 8 : 6)
@@ -411,7 +420,7 @@ struct PerformanceScreen: View {
             }), in: 30...120, step: 1)
             Text("第一拍加重。调速会同步练习速度；弹奏中调速将从当前范围开头重新倒计时。").font(.caption).foregroundStyle(.secondary)
             Text("暂停时停止，继续练习时自动跟拍。使用麦克风时建议戴耳机，减少节拍声干扰识音。").font(.caption).foregroundStyle(.secondary)
-            Button("完成") { showMetronome = false }.buttonStyle(.borderedProminent)
+            Button("完成") { panel = nil }.buttonStyle(.borderedProminent)
         }.tint(Bloom.pink)
     }
     private func toolButton(_ title: String, icon: String, active: Bool, action: @escaping () -> Void) -> some View {
@@ -438,7 +447,7 @@ struct PerformanceScreen: View {
             }
             if case let .failed(message) = microphone.state { Text(message).font(.caption).foregroundStyle(.orange) }
             HStack(spacing: 12) {
-                Button { model.pause(); showReview = true } label: {
+                Button { model.pause(); panel = .review } label: {
                     Image(systemName: "questionmark.circle").font(.title3).frame(width: 44, height: 44)
                 }.accessibilityLabel("练习说明")
                 VStack(alignment: .leading, spacing: 2) {

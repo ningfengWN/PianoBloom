@@ -5,36 +5,63 @@ enum SolfegeActivity: String, CaseIterable { case listen = "听唱谱", sing = "
 
 /// Collects system Chinese speech in memory. Rendering, not pitchMultiplier,
 /// tunes the voiced syllables to exact score periods and lengths.
-private final class SolfegeVoiceBank {
-    private let speech = AVSpeechSynthesizer()
+private final class SolfegeVoiceBank: NSObject, AVSpeechSynthesizerDelegate {
+    private var speech: AVSpeechSynthesizer?
+    private var utterance: AVSpeechUtterance?
     private var samples: [String: SolfegeVoiceSample] = [:]
     private var generation = UUID()
-    func stop() { generation = UUID(); speech.stopSpeaking(at: .immediate) }
-    func prepare(words: [String], completion: @escaping (Result<[String: SolfegeVoiceSample], Error>) -> Void) {
+    private var collected: [Float] = []
+    private var rate = 22050.0
+    private var finishWord: ((Result<SolfegeVoiceSample, Error>) -> Void)?
+    func stop() {
+        generation = UUID(); finishWord = nil; utterance = nil
+        speech?.delegate = nil
+        if speech?.isSpeaking == true { speech?.stopSpeaking(at: .immediate) }
+        speech = nil; collected = []
+    }
+    func prepare(words: [String], progress: @escaping (Int, Int) -> Void,
+                 completion: @escaping (Result<[String: SolfegeVoiceSample], Error>) -> Void) {
         stop()
         let id = generation
         func next(_ index: Int) {
             guard self.generation == id else { return }
             if index == words.count { completion(.success(self.samples)); return }
+            progress(index, words.count)
             let word = words[index]
             if self.samples[word] != nil { next(index + 1); return }
             guard let voice = AVSpeechSynthesisVoice(language: "zh-CN") else {
                 completion(.failure(VoiceError.unavailable)); return
             }
+            // A fresh writer avoids cancel/requeue races with an earlier utterance.
+            let writer = AVSpeechSynthesizer()
+            writer.delegate = self
+            self.speech = writer
+            self.collected = []; self.rate = 22050
             let utterance = AVSpeechUtterance(string: word)
             utterance.voice = voice; utterance.rate = 0.42
-            var collected: [Float] = [], rate = 22050.0, done = false
-            self.speech.write(utterance) { buffer in
+            self.utterance = utterance
+            self.finishWord = { result in
+                guard self.generation == id else { return }
+                switch result {
+                case .failure(let error): self.stop(); completion(.failure(error))
+                case .success(let sample):
+                    self.samples[word] = sample
+                    // Leave the writer's terminal callback before preparing the next syllable.
+                    DispatchQueue.main.async { next(index + 1) }
+                }
+            }
+            writer.write(utterance) { [weak self, weak writer] buffer in
                 guard let pcm = buffer as? AVAudioPCMBuffer else { return }
                 let count = Int(pcm.frameLength), channels = Int(pcm.format.channelCount)
+                let sampleRate = pcm.format.sampleRate
                 var values = [Float](repeating: 0, count: count)
-                if let data = pcm.floatChannelData {
+                if channels > 0, let data = pcm.floatChannelData {
                     for frame in 0..<count {
                         for channel in 0..<channels {
                             values[frame] += pcm.format.isInterleaved ? data[0][frame * channels + channel] / Float(channels) : data[channel][frame] / Float(channels)
                         }
                     }
-                } else if let data = pcm.int16ChannelData {
+                } else if channels > 0, let data = pcm.int16ChannelData {
                     for frame in 0..<count {
                         for channel in 0..<channels {
                             let value = pcm.format.isInterleaved ? data[0][frame * channels + channel] : data[channel][frame]
@@ -42,31 +69,53 @@ private final class SolfegeVoiceBank {
                         }
                     }
                 }
-                let sampleRate = pcm.format.sampleRate
                 DispatchQueue.main.async {
-                    guard self.generation == id, !done else { return }
-                    if count > 0 { collected += values; rate = sampleRate }
+                    guard let self, let writer, self.generation == id,
+                          self.speech === writer, self.finishWord != nil else { return }
+                    if count <= 1 { self.completeWord() }
                     else {
-                        done = true
-                        guard !collected.isEmpty else { completion(.failure(VoiceError.unavailable)); return }
-                        self.samples[word] = SolfegeVoiceSample(samples: collected, sampleRate: rate)
-                        next(index + 1)
+                        self.collected += values; self.rate = sampleRate
+                        if self.collected.count > Int(sampleRate * 5) { self.failWord(VoiceError.unavailable) }
                     }
                 }
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 12) {
-                guard self.generation == id, !done else { return }
-                done = true; self.stop(); completion(.failure(VoiceError.unavailable))
+            DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self, weak writer] in
+                guard let self, let writer, self.generation == id, self.speech === writer,
+                      self.finishWord != nil else { return }
+                self.failWord(VoiceError.timeout)
             }
         }
         next(0)
     }
+    private func completeWord() {
+        guard let finish = finishWord else { return }
+        finishWord = nil
+        guard !collected.isEmpty else { finish(.failure(VoiceError.unavailable)); return }
+        finish(.success(SolfegeVoiceSample(samples: collected, sampleRate: rate)))
+    }
+    private func failWord(_ error: Error) {
+        let finish = finishWord; finishWord = nil; finish?(.failure(error))
+    }
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.speech === synthesizer, self.utterance === utterance else { return }
+            self.completeWord()
+        }
+    }
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.speech === synthesizer, self.utterance === utterance else { return }
+            self.failWord(VoiceError.unavailable)
+        }
+    }
     enum VoiceError: LocalizedError {
-        case unavailable, render
+        case unavailable, render, timeout, playback
         var errorDescription: String? {
             switch self {
-            case .unavailable: return "系统中文语音暂不可用，请在系统辅助功能的朗读语音中下载中文语音后重试。"
-            case .render: return "这个系统语音暂时无法合成唱谱，请换一个中文语音后重试。"
+            case .unavailable: return "系统中文语音暂不可用。请在系统设置的朗读内容中下载中文语音，再返回重试。"
+            case .render: return "当前中文语音无法合成唱谱，请更换中文语音后重试。"
+            case .timeout: return "唱谱准备超时，已停止。可以点击重试；若仍失败，请确认系统中文语音已下载。"
+            case .playback: return "唱谱声音未能开始播放，请重试。"
             }
         }
     }
@@ -81,6 +130,8 @@ final class SolfegeModel: ObservableObject {
     @Published var hand: PracticeHands = .right
     @Published var octave = 0
     @Published private(set) var preparing = false
+    @Published private(set) var preparationProgress = 0.0
+    @Published private(set) var preparationFailed = false
     @Published private(set) var running = false
     @Published private(set) var completed = false
     @Published private(set) var elapsed = 0.0
@@ -93,6 +144,7 @@ final class SolfegeModel: ObservableObject {
     private var timer: Timer?
     private var epoch: Double?
     private var generation = UUID()
+    private var preparationJob: SolfegePreparationJob?
     var notes: [SingingNote] { assessment.notes }
     var position: Int {
         if activity == .sing { return assessment.position }
@@ -119,7 +171,7 @@ final class SolfegeModel: ObservableObject {
             self.stop(); self.feedback = "聆听已暂停。"
         }
     }
-    deinit { timer?.invalidate() }
+    deinit { timer?.invalidate(); preparationJob?.cancel() }
     func configure() {
         stop()
         assessment = SingingAssessment(score: score, hand: hand, bpm: bpm, octave: octave)
@@ -133,6 +185,7 @@ final class SolfegeModel: ObservableObject {
         else { microphone.start() }
     }
     func stop() {
+        preparationJob?.cancel(); preparationJob = nil
         generation = UUID(); running = false; preparing = false
         timer?.invalidate(); timer = nil
         player?.stop(); player = nil; bank.stop(); countSound.stop()
@@ -143,26 +196,43 @@ final class SolfegeModel: ObservableObject {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
             try AVAudioSession.sharedInstance().setActive(true)
         } catch { feedback = error.localizedDescription; return }
-        preparing = true; feedback = "正在准备本机合成唱谱…"
+        preparing = true; preparationFailed = false; preparationProgress = 0
+        feedback = "正在准备中文唱名…"
         let id = generation, sequence = notes, length = assessment.length
         guard length <= 600 else { preparing = false; feedback = "曲子较长，请先选一个小段唱谱。"; return }
-        bank.prepare(words: Array(Set(notes.map { Solfege.word($0.midi) })).sorted()) { [weak self] result in
+        let job = SolfegePreparationJob(timeout: 30)
+        preparationJob = job
+        DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak self] in
+            guard let self, self.generation == id, self.preparing else { return }
+            self.failPreparation(SolfegeVoiceBank.VoiceError.timeout, id: id)
+        }
+        bank.prepare(words: Array(Set(notes.map { Solfege.word($0.midi) })).sorted(), progress: { [weak self] index, total in
+            guard let self, self.generation == id else { return }
+            self.preparationProgress = Double(index) / Double(max(1, total)) * 0.4
+            self.feedback = "正在准备唱名 \(index + 1)/\(total)…"
+        }) { [weak self] result in
             guard let self, self.generation == id else { return }
             switch result {
-            case .failure(let error): self.preparing = false; self.feedback = error.localizedDescription
+            case .failure(let error): self.failPreparation(error, id: id)
             case .success(let voices):
                 self.renderQueue.async {
                     let rate = 16000.0
                     var waveform = [Float](repeating: 0, count: Int((length + 0.15) * rate))
                     var cache: [String: [Float]] = [:]
-                    for note in sequence {
+                    for (index, note) in sequence.enumerated() {
+                        guard !job.isCancelled else { return }
+                        DispatchQueue.main.async {
+                            guard self.generation == id, self.preparing else { return }
+                            self.preparationProgress = 0.4 + 0.55 * Double(index) / Double(max(1, sequence.count))
+                            self.feedback = "正在合成旋律 \(index + 1)/\(sequence.count)…"
+                        }
                         let key = "\(note.midi)-\(note.duration)"
                         if cache[key] == nil {
                             guard let voice = voices[Solfege.word(note.midi)],
-                                  let rendered = SolfegeVoiceRenderer.render(voice, midi: note.midi, duration: note.duration * 0.95) else {
+                                  let rendered = SolfegeVoiceRenderer.render(voice, midi: note.midi, duration: note.duration * 0.95, shouldCancel: { job.isCancelled }) else {
                                 DispatchQueue.main.async {
                                     guard self.generation == id else { return }
-                                    self.preparing = false; self.feedback = SolfegeVoiceBank.VoiceError.render.localizedDescription
+                                    self.failPreparation(job.isCancelled ? SolfegeVoiceBank.VoiceError.timeout : .render, id: id)
                                 }; return
                             }
                             cache[key] = rendered
@@ -170,6 +240,7 @@ final class SolfegeModel: ObservableObject {
                         let start = Int(note.start * rate)
                         for (offset, value) in cache[key]!.enumerated() where start + offset < waveform.count { waveform[start + offset] += value }
                     }
+                    guard !job.isCancelled else { return }
                     let data = Self.wav(waveform, rate: UInt32(rate))
                     DispatchQueue.main.async {
                         guard self.generation == id else { return }
@@ -177,15 +248,23 @@ final class SolfegeModel: ObservableObject {
                             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
                             try AVAudioSession.sharedInstance().setActive(true)
                             self.player = try AVAudioPlayer(data: data)
-                            self.player?.prepareToPlay(); self.player?.play()
+                            guard let player = self.player, player.prepareToPlay(), player.play() else {
+                                self.failPreparation(SolfegeVoiceBank.VoiceError.playback, id: id); return
+                            }
+                            self.preparationJob = nil; self.preparationProgress = 1
                             self.preparing = false; self.running = true
                             self.feedback = "合成唱谱示范 · 跟着亮起的音符一起唱。"
                             self.startTimer()
-                        } catch { self.preparing = false; self.feedback = error.localizedDescription }
+                        } catch { self.failPreparation(error, id: id) }
                     }
                 }
             }
         }
+    }
+    private func failPreparation(_ error: Error, id: UUID) {
+        guard generation == id else { return }
+        stop() // Invalidates all late speech/render callbacks before a retry.
+        preparationFailed = true; feedback = error.localizedDescription
     }
     private func startSingingClock() {
         guard activity == .sing else { return }

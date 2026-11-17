@@ -43,7 +43,12 @@ struct SolfegeScreen: View {
                                 .font(.caption).foregroundStyle(Bloom.lilac)
                         }
                         Spacer(minLength: 0)
-                        if model.preparing { ProgressView() }
+                        if model.preparing {
+                            VStack(spacing: 4) {
+                                ProgressView(value: model.preparationProgress).frame(width: 70)
+                                Text("\(Int(model.preparationProgress * 100))%").font(.caption.monospacedDigit())
+                            }
+                        }
                         if let count = model.countIn { Text("\(count)").font(.largeTitle.bold()).foregroundStyle(Bloom.pink) }
                     }.padding(16).background(.white, in: RoundedRectangle(cornerRadius: 20))
                     SolfegeScore(model: model, wide: geometry.size.width > 700)
@@ -61,7 +66,7 @@ struct SolfegeScreen: View {
                     }
                     if case let .failed(message) = microphone.state { Text(message).font(.caption).foregroundStyle(.orange) }
                     Button { model.toggle() } label: {
-                        Label(model.preparing || model.running || microphone.requesting ? "停止" : (model.activity == .listen ? "听 App 唱谱" : "开始唱谱测评"),
+                        Label(model.preparing || model.running || microphone.requesting ? "停止" : (model.activity == .listen ? (model.preparationFailed ? "重试唱谱" : "听 App 唱谱") : "开始唱谱测评"),
                               systemImage: model.running || model.preparing || microphone.requesting ? "stop.fill" : (model.activity == .listen ? "speaker.wave.2.fill" : "mic.fill"))
                             .font(.headline).frame(maxWidth: .infinity, minHeight: 38)
                     }.buttonStyle(.borderedProminent).clipShape(Capsule())

@@ -321,4 +321,12 @@ if let sung = SolfegeVoiceRenderer.render(voiceSource, midi: 60, duration: 0.6) 
     check(f.map { abs($0 / Music.frequency(60) - 1) < 0.03 } ?? false, "PSOLA tunes voiced syllable to actual note pitch, not speech pitch multiplier")
 } else { check(false, "voiced syllable renders") }
 check(SolfegeVoiceRenderer.render(SolfegeVoiceSample(samples: [Float](repeating: 0, count: 16000), sampleRate: 16000), midi: 60, duration: 1) == nil, "unavailable voice is rejected instead of being replaced with a piano tone")
+let expiredSong = SolfegePreparationJob(timeout: -1)
+check(expiredSong.isCancelled, "expired preparation cannot begin or revive audio")
+let cancelledSong = SolfegePreparationJob(timeout: 30)
+check(!cancelledSong.isCancelled, "new preparation can render")
+cancelledSong.cancel()
+check(SolfegeVoiceRenderer.render(voiceSource, midi: 60, duration: 0.6, shouldCancel: { cancelledSong.isCancelled }) == nil, "stopped preparation cannot keep rendering after exit or retry")
+var renderProbes = 0
+check(SolfegeVoiceRenderer.render(voiceSource, midi: 60, duration: 0.6, shouldCancel: { renderProbes += 1; return renderProbes > 4 }) == nil, "cancellation interrupts in-progress pitch analysis")
 print("PASS: \(checks) production core checks")
