@@ -321,6 +321,11 @@ if let sung = SolfegeVoiceRenderer.render(voiceSource, midi: 60, duration: 0.6) 
     check(f.map { abs($0 / Music.frequency(60) - 1) < 0.03 } ?? false, "PSOLA tunes voiced syllable to actual note pitch, not speech pitch multiplier")
 } else { check(false, "voiced syllable renders") }
 check(SolfegeVoiceRenderer.render(SolfegeVoiceSample(samples: [Float](repeating: 0, count: 16000), sampleRate: 16000), midi: 60, duration: 1) == nil, "unavailable voice is rejected instead of being replaced with a piano tone")
+if let grain = SolfegeVoiceRenderer.prepare(voiceSource),
+   let cachedNote = SolfegeVoiceRenderer.render(grain, midi: 67, duration: 0.6) {
+    let f = PitchDetector.analyze(Array(cachedNote[3200..<5248]), sampleRate: 16000, time: 0).frequency
+    check(f.map { abs($0 / Music.frequency(67) - 1) < 0.03 } ?? false, "cached syllable grain follows a new note pitch without repeating voice analysis")
+} else { check(false, "cached voice grain renders") }
 let expiredSong = SolfegePreparationJob(timeout: -1)
 check(expiredSong.isCancelled, "expired preparation cannot begin or revive audio")
 let cancelledSong = SolfegePreparationJob(timeout: 30)

@@ -101,9 +101,20 @@ struct SolfegeVoiceSample {
 
 /// Pitch-synchronous overlap-add: system speech supplies syllables and formants;
 /// the voiced grain is repeated at the score's target period and stretched to its duration.
+struct SolfegeVoiceGrain {
+    let samples: [Float]
+    let sampleRate: Double
+    let period: Double
+    let anchor: Int
+}
+
 enum SolfegeVoiceRenderer {
     static func render(_ source: SolfegeVoiceSample, midi: Int, duration: Double, outputRate: Double = 16000, shouldCancel: () -> Bool = { false }) -> [Float]? {
-        guard !shouldCancel(), duration > 0, duration <= 600, (0...127).contains(midi), source.sampleRate > 0, source.sampleRate.isFinite, !source.samples.isEmpty else { return nil }
+        guard let grain = prepare(source, shouldCancel: shouldCancel) else { return nil }
+        return render(grain, midi: midi, duration: duration, outputRate: outputRate, shouldCancel: shouldCancel)
+    }
+    static func prepare(_ source: SolfegeVoiceSample, shouldCancel: () -> Bool = { false }) -> SolfegeVoiceGrain? {
+        guard !shouldCancel(), source.sampleRate > 0, source.sampleRate.isFinite, !source.samples.isEmpty else { return nil }
         let input = source.samples
         let peak = input.map { abs($0) }.max() ?? 0
         guard peak > 0.001, let lo = input.firstIndex(where: { abs($0) > peak * 0.025 }),
@@ -128,17 +139,22 @@ enum SolfegeVoiceRenderer {
         let searchLo = max(radius + 1, best.0 - radius), searchHi = min(trimmed.count - radius - 2, best.0 + radius)
         guard searchHi > searchLo else { return nil }
         let anchor = (searchLo...searchHi).max(by: { trimmed[$0] < trimmed[$1] }) ?? best.0
+        return SolfegeVoiceGrain(samples: trimmed, sampleRate: source.sampleRate, period: period, anchor: anchor)
+    }
+    static func render(_ grain: SolfegeVoiceGrain, midi: Int, duration: Double, outputRate: Double = 16000, shouldCancel: () -> Bool = { false }) -> [Float]? {
+        guard !shouldCancel(), duration > 0, duration <= 600, (0...127).contains(midi), outputRate >= 8000, outputRate.isFinite else { return nil }
+        let trimmed = grain.samples, period = grain.period, anchor = grain.anchor
         var output = [Float](repeating: 0, count: max(1, Int(duration * outputRate)))
         var weights = [Float](repeating: 0, count: output.count)
         let targetPeriod = outputRate / Music.frequency(midi)
-        let grainRadius = period * outputRate / source.sampleRate
+        let grainRadius = period * outputRate / grain.sampleRate
         var center = 0.0
         while center < Double(output.count) + grainRadius {
             guard !shouldCancel() else { return nil }
             let left = max(0, Int(floor(center - grainRadius))), right = min(output.count - 1, Int(ceil(center + grainRadius)))
             if left <= right {
                 for index in left...right {
-                    let delta = (Double(index) - center) * source.sampleRate / outputRate
+                    let delta = (Double(index) - center) * grain.sampleRate / outputRate
                     let sourcePosition = Double(anchor) + delta
                     let first = Int(floor(sourcePosition)), fraction = Float(sourcePosition - floor(sourcePosition))
                     guard first >= 0, first + 1 < trimmed.count, abs(delta) <= period else { continue }
@@ -154,7 +170,7 @@ enum SolfegeVoiceRenderer {
         for index in output.indices {
             if weights[index] > 0.001 { output[index] /= weights[index] }
             if index < prefix {
-                let sourceIndex = min(trimmed.count - 1, Int(Double(index) * source.sampleRate / outputRate))
+                let sourceIndex = min(trimmed.count - 1, Int(Double(index) * grain.sampleRate / outputRate))
                 let blend = Float(index) / Float(max(1, prefix))
                 output[index] = trimmed[sourceIndex] * (1 - blend) + output[index] * blend
             }

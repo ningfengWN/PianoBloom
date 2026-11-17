@@ -217,6 +217,16 @@ final class SolfegeModel: ObservableObject {
             case .success(let voices):
                 self.renderQueue.async {
                     let rate = 16000.0
+                    // Analyze each syllable once; reuse its voiced grain across pitches and lengths.
+                    var grains: [String: SolfegeVoiceGrain] = [:]
+                    for (word, voice) in voices {
+                        guard let grain = SolfegeVoiceRenderer.prepare(voice, shouldCancel: { job.isCancelled }) else {
+                            DispatchQueue.main.async {
+                                self.failPreparation(job.isCancelled ? SolfegeVoiceBank.VoiceError.timeout : .render, id: id)
+                            }; return
+                        }
+                        grains[word] = grain
+                    }
                     var waveform = [Float](repeating: 0, count: Int((length + 0.15) * rate))
                     var cache: [String: [Float]] = [:]
                     for (index, note) in sequence.enumerated() {
@@ -228,8 +238,8 @@ final class SolfegeModel: ObservableObject {
                         }
                         let key = "\(note.midi)-\(note.duration)"
                         if cache[key] == nil {
-                            guard let voice = voices[Solfege.word(note.midi)],
-                                  let rendered = SolfegeVoiceRenderer.render(voice, midi: note.midi, duration: note.duration * 0.95, shouldCancel: { job.isCancelled }) else {
+                            guard let grain = grains[Solfege.word(note.midi)],
+                                  let rendered = SolfegeVoiceRenderer.render(grain, midi: note.midi, duration: note.duration * 0.95, shouldCancel: { job.isCancelled }) else {
                                 DispatchQueue.main.async {
                                     guard self.generation == id else { return }
                                     self.failPreparation(job.isCancelled ? SolfegeVoiceBank.VoiceError.timeout : .render, id: id)
