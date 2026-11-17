@@ -348,4 +348,10 @@ for score in PianoScore.all {
     }
 }
 check(ScoreRowLayout(score: PianoScore.starters[0]).rows[0].events.count != ScoreRowLayout(score: HanonScores.all[0]).rows[0].events.count, "same three measures allow different note counts")
+// The user's exam edition differs from the old No.27 repertoire: preserve version identity.
+let examBook = PianoTextbook.examination
+let gradeThreeA = examBook.entries.filter { $0.group == "3级 · A组" }
+check(gradeThreeA.map(\.title) == ["练习曲", "京剧小段", "快活的猎人"] && gradeThreeA.map(\.page) == [30,32,34] && gradeThreeA.first?.credit == "舒曼", "exam repertoire matches the photographed edition and page numbers")
+check(Set(examBook.entries.map(\.id)).count == examBook.entries.count, "identically named exam etudes remain distinct by grade and group")
+check(PianoTextbook.thompson.entries.first?.page == 4 && PianoTextbook.thompson.entries.last?.page == 43, "Thompson book order matches the provided contents")
 print("PASS: \(checks) production core checks")

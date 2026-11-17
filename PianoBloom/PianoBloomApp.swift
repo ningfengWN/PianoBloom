@@ -145,6 +145,17 @@ struct GardenHome: View {
                 Spacer()
                 Text("\(filteredScores.count) 首").font(.caption.bold()).foregroundStyle(Bloom.pink)
             }
+            NavigationLink { TextbookLibrary() } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "books.vertical.fill").font(.title2)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("教材书架").font(.headline)
+                        Text("小汤三 · 中国音乐学院考级 · 孩子们的哈农").font(.caption)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                }.foregroundStyle(Bloom.pink).padding(16).background(.white, in: RoundedRectangle(cornerRadius: 20))
+            }
             TextField("搜索曲名，如：小星星、哈农", text: $searchText)
                 .textFieldStyle(.roundedBorder).accessibilityLabel("搜索曲谱")
             Picker("曲库", selection: $hanon) { Text("星星启蒙").tag(false); Text("哈农花园").tag(true) }.pickerStyle(.segmented)
