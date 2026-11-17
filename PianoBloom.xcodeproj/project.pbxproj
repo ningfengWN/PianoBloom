@@ -1,40 +1,243 @@
 // !$*UTF8*$!
-{ archiveVersion = 1; classes = {}; objectVersion = 56; objects = {
-000000000000000000000001 = { isa = PBXProject; buildConfigurationList = 00000000000000000000000D; compatibilityVersion = "Xcode 14.0"; mainGroup = 000000000000000000000002; productRefGroup = 000000000000000000000004; targets = (000000000000000000000005); attributes = { LastUpgradeCheck = 1500; }; };
-000000000000000000000002 = { isa = PBXGroup; children = (000000000000000000000003, 000000000000000000000004); sourceTree = "<group>"; };
-000000000000000000000003 = { isa = PBXGroup; path = PianoBloom; children = (000000000000000000000304, 000000000000000000000303, 000000000000000000000302, 000000000000000000000301, 000000000000000000000300, 000000000000000000000007, 000000000000000000000008, 000000000000000000000064, 000000000000000000000065, 000000000000000000000066, 000000000000000000000067); sourceTree = "<group>"; };
-000000000000000000000004 = { isa = PBXGroup; name = Products; children = (000000000000000000000006); sourceTree = "<group>"; };
-000000000000000000000007 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PianoBloomApp.swift; sourceTree = "<group>"; };
-000000000000000000000008 = { isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-000000000000000000000006 = { isa = PBXFileReference; explicitFileType = wrapper.application; path = PianoBloom.app; sourceTree = BUILT_PRODUCTS_DIR; };
-000000000000000000000009 = { isa = PBXBuildFile; fileRef = 000000000000000000000007; };
-00000000000000000000000A = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000404, 000000000000000000000403, 000000000000000000000402, 000000000000000000000401, 000000000000000000000400, 000000000000000000000009, 0000000000000000000000C8, 0000000000000000000000C9, 0000000000000000000000CA); runOnlyForDeploymentPostprocessing = 0; };
-00000000000000000000000B = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-00000000000000000000000C = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (0000000000000000000000CB); runOnlyForDeploymentPostprocessing = 0; };
-000000000000000000000005 = { isa = PBXNativeTarget; name = PianoBloom; productName = PianoBloom; productReference = 000000000000000000000006; productType = "com.apple.product-type.application"; buildConfigurationList = 00000000000000000000000E; buildPhases = (00000000000000000000000A,00000000000000000000000B,00000000000000000000000C); buildRules = (); dependencies = (); };
-00000000000000000000000D = { isa = XCConfigurationList; buildConfigurations = (00000000000000000000000F,000000000000000000000010); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-00000000000000000000000F = { isa = XCBuildConfiguration; name = Debug; buildSettings = { SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG; SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 16.0; SWIFT_VERSION = 5.0; }; };
-000000000000000000000010 = { isa = XCBuildConfiguration; name = Release; buildSettings = { SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 16.0; SWIFT_VERSION = 5.0; }; };
-00000000000000000000000E = { isa = XCConfigurationList; buildConfigurations = (000000000000000000000011,000000000000000000000012); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-000000000000000000000011 = { isa = XCBuildConfiguration; name = Debug; buildSettings = { SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG; SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 16.0; SWIFT_VERSION = 5.0; PRODUCT_BUNDLE_IDENTIFIER = com.pianobloom.app; PRODUCT_NAME = "$(TARGET_NAME)"; INFOPLIST_FILE = PianoBloom/Info.plist; TARGETED_DEVICE_FAMILY = "1,2"; CODE_SIGN_STYLE = Automatic; ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; ENABLE_PREVIEWS = YES; SWIFT_OPTIMIZATION_LEVEL = "-O"; }; };
-000000000000000000000012 = { isa = XCBuildConfiguration; name = Release; buildSettings = { SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 16.0; SWIFT_VERSION = 5.0; PRODUCT_BUNDLE_IDENTIFIER = com.pianobloom.app; PRODUCT_NAME = "$(TARGET_NAME)"; INFOPLIST_FILE = PianoBloom/Info.plist; TARGETED_DEVICE_FAMILY = "1,2"; CODE_SIGN_STYLE = Automatic; ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; ENABLE_PREVIEWS = YES; SWIFT_OPTIMIZATION_LEVEL = "-O"; }; };
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
 
-000000000000000000000064 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PitchCore.swift; sourceTree = "<group>"; };
-0000000000000000000000C8 = { isa = PBXBuildFile; fileRef = 000000000000000000000064; };
-000000000000000000000065 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Microphone.swift; sourceTree = "<group>"; };
-0000000000000000000000C9 = { isa = PBXBuildFile; fileRef = 000000000000000000000065; };
-000000000000000000000066 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeModel.swift; sourceTree = "<group>"; };
-0000000000000000000000CA = { isa = PBXBuildFile; fileRef = 000000000000000000000066; };
-000000000000000000000067 = { isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-0000000000000000000000CB = { isa = PBXBuildFile; fileRef = 000000000000000000000067; };
-000000000000000000000300 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoreCore.swift; sourceTree = "<group>"; };
-000000000000000000000400 = { isa = PBXBuildFile; fileRef = 000000000000000000000300; };
-000000000000000000000301 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HanonScores.swift; sourceTree = "<group>"; };
-000000000000000000000401 = { isa = PBXBuildFile; fileRef = 000000000000000000000301; };
-000000000000000000000302 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolyphonicCore.swift; sourceTree = "<group>"; };
-000000000000000000000402 = { isa = PBXBuildFile; fileRef = 000000000000000000000302; };
-000000000000000000000303 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MIDIInput.swift; sourceTree = "<group>"; };
-000000000000000000000403 = { isa = PBXBuildFile; fileRef = 000000000000000000000303; };
-000000000000000000000304 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrandStaffView.swift; sourceTree = "<group>"; };
-000000000000000000000404 = { isa = PBXBuildFile; fileRef = 000000000000000000000304; };
-}; rootObject = 000000000000000000000001; }
+/* Begin PBXBuildFile section */
+		000000000000000000000009 /* PianoBloomApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000007 /* PianoBloomApp.swift */; };
+		0000000000000000000000C8 /* PitchCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000064 /* PitchCore.swift */; };
+		0000000000000000000000C9 /* Microphone.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000065 /* Microphone.swift */; };
+		0000000000000000000000CA /* PracticeModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000066 /* PracticeModel.swift */; };
+		0000000000000000000000CB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000067 /* Assets.xcassets */; };
+		000000000000000000000400 /* ScoreCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000300 /* ScoreCore.swift */; };
+		000000000000000000000401 /* HanonScores.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000301 /* HanonScores.swift */; };
+		000000000000000000000402 /* PolyphonicCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000302 /* PolyphonicCore.swift */; };
+		000000000000000000000403 /* MIDIInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000303 /* MIDIInput.swift */; };
+		000000000000000000000404 /* GrandStaffView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000304 /* GrandStaffView.swift */; };
+		2DBE59C430A5ECE50029DBD3 /* File.txt in Resources */ = {isa = PBXBuildFile; fileRef = 2DBE59C330A5ECE50029DBD3 /* File.txt */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		000000000000000000000006 /* PianoBloom.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; path = PianoBloom.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		000000000000000000000007 /* PianoBloomApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PianoBloomApp.swift; sourceTree = "<group>"; };
+		000000000000000000000008 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		000000000000000000000064 /* PitchCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PitchCore.swift; sourceTree = "<group>"; };
+		000000000000000000000065 /* Microphone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Microphone.swift; sourceTree = "<group>"; };
+		000000000000000000000066 /* PracticeModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeModel.swift; sourceTree = "<group>"; };
+		000000000000000000000067 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		000000000000000000000300 /* ScoreCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoreCore.swift; sourceTree = "<group>"; };
+		000000000000000000000301 /* HanonScores.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HanonScores.swift; sourceTree = "<group>"; };
+		000000000000000000000302 /* PolyphonicCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolyphonicCore.swift; sourceTree = "<group>"; };
+		000000000000000000000303 /* MIDIInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MIDIInput.swift; sourceTree = "<group>"; };
+		000000000000000000000304 /* GrandStaffView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrandStaffView.swift; sourceTree = "<group>"; };
+		2DBE59C330A5ECE50029DBD3 /* File.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = File.txt; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		00000000000000000000000B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		000000000000000000000002 = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000003 /* PianoBloom */,
+				000000000000000000000004 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		000000000000000000000003 /* PianoBloom */ = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000304 /* GrandStaffView.swift */,
+				000000000000000000000303 /* MIDIInput.swift */,
+				000000000000000000000302 /* PolyphonicCore.swift */,
+				000000000000000000000301 /* HanonScores.swift */,
+				2DBE59C330A5ECE50029DBD3 /* File.txt */,
+				000000000000000000000300 /* ScoreCore.swift */,
+				000000000000000000000007 /* PianoBloomApp.swift */,
+				000000000000000000000008 /* Info.plist */,
+				000000000000000000000064 /* PitchCore.swift */,
+				000000000000000000000065 /* Microphone.swift */,
+				000000000000000000000066 /* PracticeModel.swift */,
+				000000000000000000000067 /* Assets.xcassets */,
+			);
+			path = PianoBloom;
+			sourceTree = "<group>";
+		};
+		000000000000000000000004 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000006 /* PianoBloom.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		000000000000000000000005 /* PianoBloom */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 00000000000000000000000E /* Build configuration list for PBXNativeTarget "PianoBloom" */;
+			buildPhases = (
+				00000000000000000000000A /* Sources */,
+				00000000000000000000000B /* Frameworks */,
+				00000000000000000000000C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PianoBloom;
+			productName = PianoBloom;
+			productReference = 000000000000000000000006 /* PianoBloom.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		000000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 1500;
+			};
+			buildConfigurationList = 00000000000000000000000D /* Build configuration list for PBXProject "PianoBloom" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 000000000000000000000002;
+			productRefGroup = 000000000000000000000004 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				000000000000000000000005 /* PianoBloom */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		00000000000000000000000C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2DBE59C430A5ECE50029DBD3 /* File.txt in Resources */,
+				0000000000000000000000CB /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		00000000000000000000000A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				000000000000000000000404 /* GrandStaffView.swift in Sources */,
+				000000000000000000000403 /* MIDIInput.swift in Sources */,
+				000000000000000000000402 /* PolyphonicCore.swift in Sources */,
+				000000000000000000000401 /* HanonScores.swift in Sources */,
+				000000000000000000000400 /* ScoreCore.swift in Sources */,
+				000000000000000000000009 /* PianoBloomApp.swift in Sources */,
+				0000000000000000000000C8 /* PitchCore.swift in Sources */,
+				0000000000000000000000C9 /* Microphone.swift in Sources */,
+				0000000000000000000000CA /* PracticeModel.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		00000000000000000000000F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		000000000000000000000010 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		000000000000000000000011 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 63HR26Z9DJ;
+				ENABLE_PREVIEWS = YES;
+				INFOPLIST_FILE = PianoBloom/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.pianobloom.yaya;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		000000000000000000000012 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 63HR26Z9DJ;
+				ENABLE_PREVIEWS = YES;
+				INFOPLIST_FILE = PianoBloom/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.pianobloom.yaya;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		00000000000000000000000D /* Build configuration list for PBXProject "PianoBloom" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				00000000000000000000000F /* Debug */,
+				000000000000000000000010 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		00000000000000000000000E /* Build configuration list for PBXNativeTarget "PianoBloom" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				000000000000000000000011 /* Debug */,
+				000000000000000000000012 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 000000000000000000000001 /* Project object */;
+}
