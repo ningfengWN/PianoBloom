@@ -9,6 +9,13 @@ final class Microphone: ObservableObject {
     @Published private(set) var level = 0.0
     var onReady: (() -> Void)?
     var onFrame: ((PitchFrame) -> Void)?
+    var onModelEvents: (([ModelOnset]) -> Void)?
+    var recognitionEngine: RecognitionEngine = .basic
+    var modelAddress = ""
+    var modelToken = ""
+    @Published private(set) var processedThrough: Double?
+    @Published private(set) var recognitionDelay = 0.0
+    private var modelClient: OnsetsVelocitiesClient?
     var polyphonic = false
     var reference = Music.standardC
     var onStop: (() -> Void)?
@@ -42,6 +49,7 @@ final class Microphone: ObservableObject {
         generation = UUID()
         let token = generation
         state = .requesting
+        processedThrough = nil; recognitionDelay = 0
         AVAudioSession.sharedInstance().requestRecordPermission { [weak self] granted in
             DispatchQueue.main.async {
                 guard let self, self.generation == token, self.state == .requesting else { return }
@@ -52,7 +60,7 @@ final class Microphone: ObservableObject {
     private func open(token: UUID) {
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.record, mode: .measurement, options: [])
+            try session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker])
             try session.setPreferredSampleRate(48000)
             try session.setPreferredIOBufferDuration(0.02)
             try session.setActive(true)
@@ -63,16 +71,31 @@ final class Microphone: ObservableObject {
             guard format.sampleRate >= 8000, format.channelCount > 0 else {
                 throw NSError(domain: "PianoBloom", code: 1, userInfo: [NSLocalizedDescriptionKey: "没有找到可用的麦克风"])
             }
+            let usesModel = recognitionEngine == .onsetsVelocities
+            let client = usesModel ? OnsetsVelocitiesClient() : nil
+            modelClient = client
             let analyzer = StreamAnalyzer(rate: format.sampleRate, polyphonic: polyphonic, reference: reference)
             let capacity = DispatchSemaphore(value: 2)
             input.installTap(onBus: 0, bufferSize: 512, format: format) { [weak self] buffer, audioTime in
-                guard let self, let channel = buffer.floatChannelData?[0],
-                      capacity.wait(timeout: .now()) == .success else { return }
+                guard let self, let channel = buffer.floatChannelData?[0] else { return }
+                guard capacity.wait(timeout: .now()) == .success else {
+                    if usesModel { DispatchQueue.main.async { self.failModel("音频处理跟不上，已暂停。", token: token) } }
+                    return
+                }
                 // Copy before leaving the callback: AVAudioEngine owns the buffer memory.
                 let samples = Array(UnsafeBufferPointer(start: channel, count: Int(buffer.frameLength)))
                 let endTime = (audioTime.isHostTimeValid ? AVAudioTime.seconds(forHostTime: audioTime.hostTime) : ProcessInfo.processInfo.systemUptime) + Double(buffer.frameLength) / format.sampleRate
                 self.queue.async {
                     defer { capacity.signal() }
+                    if let client {
+                        client.append(samples, endTime: endTime)
+                        let rms = sqrt(samples.reduce(0.0) { $0 + Double($1 * $1) } / Double(max(1, samples.count)))
+                        DispatchQueue.main.async { [weak self] in
+                            guard let self, self.generation == token, self.listening else { return }
+                            self.level = rms
+                        }
+                        return
+                    }
                     guard let frame = analyzer.append(samples, endTime: endTime) else { return }
                     DispatchQueue.main.async { [weak self] in
                         guard let self, self.generation == token, self.listening else { return }
@@ -82,16 +105,38 @@ final class Microphone: ObservableObject {
                 }
             }
             tapInstalled = true
-            e.prepare()
-            try e.start()
-            state = .listening
-            onReady?()
+            if let client {
+                client.onReady = { [weak self, weak e] delay in
+                    guard let self, let e, self.generation == token, self.requesting else { return }
+                    do {
+                        e.prepare(); try e.start()
+                        self.recognitionDelay = delay
+                        self.state = .listening; self.onReady?()
+                    } catch { self.failModel(error.localizedDescription, token: token) }
+                }
+                client.onEvents = { [weak self] events, through, delay in
+                    guard let self, self.generation == token, self.listening else { return }
+                    self.onModelEvents?(events)
+                    guard self.generation == token, self.listening else { return }
+                    self.processedThrough = through; self.recognitionDelay = delay
+                }
+                client.onFailure = { [weak self] message in self?.failModel(message, token: token) }
+                client.start(address: modelAddress, token: modelToken, sampleRate: format.sampleRate)
+            } else {
+                e.prepare(); try e.start()
+                state = .listening; onReady?()
+            }
         } catch {
             stop()
             state = .failed(error.localizedDescription)
         }
     }
+    private func failModel(_ message: String, token: UUID) {
+        guard generation == token else { return }
+        stop(); state = .failed(message)
+    }
     func stop() {
+        modelClient?.stop(); modelClient = nil
         generation = UUID() // Discard queued frames and cancelled permission callbacks.
         engine?.stop()
         if tapInstalled { engine?.inputNode.removeTap(onBus: 0) }

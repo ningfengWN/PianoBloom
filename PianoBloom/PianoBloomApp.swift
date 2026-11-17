@@ -104,10 +104,10 @@ struct GardenHome: View {
             }
             VStack(alignment: .leading, spacing: 8) {
                 Text("练习方式").font(.caption.bold()).foregroundStyle(.secondary)
-                Picker("练习方式", selection: Binding(get: { model.style }, set: { model.configure(style: $0) })) {
-                    ForEach(PlayStyle.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                Picker("练习方式", selection: Binding(get: { model.practiceMode }, set: { model.selectPracticeMode($0) })) {
+                    ForEach(PracticeMode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                 }.pickerStyle(.segmented)
-                Text(model.style == .follow ? "跟着音符慢慢弹，错音会记下并继续。" : "按固定节拍演奏，结束后看看节奏星星。")
+                Text(model.practiceMode.instruction)
                     .font(.caption).foregroundStyle(Bloom.lilac)
             }
             HStack {
@@ -154,11 +154,11 @@ struct GardenHome: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(model.score.title).font(.headline).foregroundStyle(Bloom.ink)
-                Button("自由练习") { model.beginFree(); performing = true }.font(.caption.bold())
+                Text(model.practiceMode == .performance ? "演奏 · 纠错练习" : "心流 · 连贯弹奏与复盘").font(.caption).foregroundStyle(Bloom.lilac)
             }
             Spacer(minLength: 4)
-            Button { model.beginGuided(); performing = true } label: {
-                Label("小兔带你练", systemImage: "sparkles").font(.headline).padding(.horizontal, 12).padding(.vertical, 9)
+            Button { model.beginFree(); performing = true } label: {
+                Label("开始练琴", systemImage: "sparkles").font(.headline).padding(.horizontal, 12).padding(.vertical, 9)
             }.buttonStyle(.borderedProminent).clipShape(Capsule())
         }.padding(.horizontal, 24).padding(.vertical, 14).frame(maxWidth: 1186).frame(maxWidth: .infinity).background(.white)
     }
@@ -292,7 +292,7 @@ struct PerformanceScreen: View {
                 Picker("选择练法", selection: Binding(get: { model.practiceMode }, set: { model.selectPracticeMode($0) })) {
                     ForEach(PracticeMode.allCases, id: \.self) { mode in Text(mode.rawValue).tag(mode) }
                 }.pickerStyle(.segmented).frame(width: 260)
-                    .accessibilityHint("识谱、节奏、演奏、心流均可直接选择，无需解锁")
+                    .accessibilityHint("演奏与心流均可直接选择，无需解锁")
                 Spacer(minLength: 0)
                 HStack(spacing: 5) {
                     ForEach(0..<model.score.beatsPerBar, id: \.self) { index in
@@ -342,6 +342,7 @@ struct PerformanceScreen: View {
             Text("琴谱大小 \(Int(model.notationScale * 100))% ").font(.subheadline)
             Slider(value: $model.notationScale, in: 1...1.7, step: 0.05).accessibilityLabel("五线谱大小")
             Toggle("显示琴键", isOn: $showKeyboard)
+            Toggle("倒计时声音提示", isOn: $model.countdownSound)
             Toggle("小兔语音提示", isOn: $model.voiceHints)
             Button("听听怎么练") { model.speakInstruction() }
             Button("音符颜色说明") { showScoreSettings = false; showReview = true }
@@ -494,7 +495,7 @@ private struct ResultGarden: View {
                             Text("卡顿/未演奏片段 \(stalls) 处 · 连续错音较多 \(result.denseErrorSections ?? 0) 处")
                                 .font(.subheadline.bold()).foregroundStyle(Bloom.lilac).multilineTextAlignment(.center)
                         }
-                        if result.source == "麦克风估算" { Text("麦克风估算结果；双手八度与踏板可能影响准确性。") .font(.caption).foregroundStyle(Bloom.lilac) }
+                        if result.source?.contains("估算") == true { Text("麦克风估算结果；双手八度与踏板可能影响准确性。") .font(.caption).foregroundStyle(Bloom.lilac) }
                         Text(result.rhythm == nil ? "这次按音符跟谱；演奏模式弹对后继续，不计算固定节拍分。" : "节奏分按固定速度下的起音时间计算；漏弹记 0 分。")
                             .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
                     }
@@ -540,6 +541,23 @@ private struct ParentSettings: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("钢琴识音引擎") {
+                    Picker("识音引擎", selection: Binding(get: { model.recognitionEngine }, set: { model.selectRecognitionEngine($0) })) {
+                        ForEach(RecognitionEngine.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    }
+                    if model.recognitionEngine == .onsetsVelocities {
+                        Link("Mac 模型启动说明", destination: URL(string: "https://github.com/ningfengWN/PianoBloom/blob/main/Server/onsets_velocities/README.md")!)
+                        TextField("ws://Mac局域网IP:8765/recognize", text: $model.modelAddress)
+                            .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+                        SecureField("Mac 服务显示的连接码", text: $model.modelToken)
+                            .textInputAutocapitalization(.never).autocorrectionDisabled()
+                        Text("实验接入：先在 Mac 启动仓库中的模型服务，iPad 与 Mac 连接同一 Wi-Fi。声音发送到你设置的 Mac，在内存处理，不保存录音。当前不支持 iPad 独立运行此模型。")
+                            .font(.caption).foregroundStyle(Bloom.lilac)
+                        Text("缩短模型窗口可能影响准确度；延迟会在弹奏页显示。连接失败会暂停，不会偷偷改用基础算法。")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Toggle("倒计时声音提示", isOn: $model.countdownSound)
+                }
                 Section("麦克风与音高") {
                     Slider(value: $model.sensitivity, in: 0...1) { Text("麦克风灵敏度") }
                     Text("向左忽略背景声，向右捕捉轻音。").font(.caption)
@@ -557,12 +575,12 @@ private struct ParentSettings: View {
                 Section("给家长的话") {
                     Text("USB MIDI 可以直接读到两只手按下的琴键，是双手与节奏评分的推荐方式。")
                     Text("真钢琴麦克风双手识别仍在测试中，无法保证区分八度音和泛音；请关闭踏板、保持安静，并把麦克风结果作为参考。")
-                    Text("跟谱练习按弹奏的顺序前进，弹错也会记下并自动继续。节奏挑战按固定速度前进，漏弹不会暂停谱面。切换手型会从当前小段重新计分，并在原先正在收音时自动恢复。")
+                    Text("演奏是纠错练习，弹错等弹对；心流是连贯弹奏与复盘，错漏音不中断。左右手独立选择，切换后从当前范围开头重新计分。")
                     Text("哈农速度以四分音符为一拍；例如 60 BPM 下十六分音符间隔 250 毫秒。")
-                    Text("曲谱与所有音频分析均在设备运行，不保存录音、不上传声音。")
+                    Text("基础识音在设备处理。选择 O&V Mac 引擎时，声音发送到你填写的 Mac 地址，在内存处理，不保存录音。")
                 }
                 Section("琴谱与署名") {
-                    Text("PianoBloom 2.5 · 心流复盘")
+                    Text("PianoBloom 2.6 · 双模式与模型接入")
                     Text("哈农 1–20：Steve Taylor / Javier Ruiz-Alma，Mutopia，CC BY-SA 4.0。保留双手、时值，展开原谱反复。启蒙双手曲为本 App 教学改编。")
                     Link("查看曲谱来源", destination: URL(string: "https://www.mutopiaproject.org/ftp/HanonCL/virtuoso-pianist-pt1/")!)
                 }
@@ -632,7 +650,7 @@ private struct PracticeLegend: View {
                 Label("红色影子在前：弹早了；在后：弹晚了", systemImage: "metronome").foregroundStyle(Bloom.lilac)
                 Label("粉色括号：不熟练区域，结束后可选小节重练", systemImage: "brackets").foregroundStyle(Bloom.pink)
                 Text("示范是本机生成的音符声音和同步键盘。阶段讲解和手动示范会暂停收音；弹奏中的错音只用画面提示，不再播放语音或要求点击开始。")
-                Text("识谱、节奏、演奏、心流都能直接选择；左手、右手、双手和练习范围也能独立切换。")
+                Text("只保留演奏（纠错练习）和心流（连贯弹奏与复盘）；左右手与练习范围独立选择。")
                 Text("演奏模式弹错会等待纠正；心流模式持续前进，结束后汇总问题。心流中的连续漏弹至少两组且持续一拍，标为卡顿/未演奏片段；连续三组错音标为错误较多。单独漏音仍为红色。")
             }.navigationTitle("小兔练琴说明").toolbar { ToolbarItem(placement: .confirmationAction) { Button("明白啦") { dismiss() } } }
         }

@@ -11,3 +11,9 @@ xcuserdata/
 # Python helper cache
 __pycache__/
 *.pyc
+
+# Local O&V service environment, upstream weights and pairing token
+Server/onsets_velocities/.venv/
+Server/onsets_velocities/.cache/
+Server/onsets_velocities/.connection-token
+upstream-model/

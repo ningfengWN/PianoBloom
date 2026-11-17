@@ -3,16 +3,11 @@ import Foundation
 enum PracticeHands: String, CaseIterable, Codable { case right = "右手", left = "左手", both = "双手" }
 enum PlayStyle: String, CaseIterable { case follow = "跟谱练习", rhythm = "节奏挑战" }
 enum PracticeMode: String, CaseIterable {
-    case reading = "识谱", rhythm = "节奏", performance = "演奏", flow = "心流"
-    var style: PlayStyle { self == .reading || self == .performance ? .follow : .rhythm }
+    case performance = "演奏", flow = "心流"
+    var style: PlayStyle { self == .performance ? .follow : .rhythm }
     var waitsForCorrect: Bool { self == .performance }
     var instruction: String {
-        switch self {
-        case .reading: return "跟着音符练习，错音记下后继续。"
-        case .rhythm: return "跟着固定节拍弹，留意起音时间。"
-        case .performance: return "弹错时停在当前音符，弹对后自动继续。"
-        case .flow: return "跟着节拍连续弹，错音、漏音和节奏问题结束后一起看。"
-        }
+        self == .performance ? "纠错练习：弹错停在当前音符，弹对后自动继续。" : "连贯弹奏：不中断，结束后汇总错漏音、节奏和卡顿。"
     }
 }
 

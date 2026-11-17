@@ -17,7 +17,9 @@
 		000000000000000000000402 /* PolyphonicCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000302 /* PolyphonicCore.swift */; };
 		000000000000000000000403 /* MIDIInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000303 /* MIDIInput.swift */; };
 		000000000000000000000404 /* GrandStaffView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000304 /* GrandStaffView.swift */; };
-		2DBE59C430A5ECE50029DBD3 /* File.txt in Resources */ = {isa = PBXBuildFile; fileRef = 2DBE59C330A5ECE50029DBD3 /* File.txt */; };
+		000000000000000000000405 /* OnsetsProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000305 /* OnsetsProtocol.swift */; };
+		000000000000000000000406 /* OnsetsVelocitiesClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000306 /* OnsetsVelocitiesClient.swift */; };
+		000000000000000000000407 /* CountInSound.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000307 /* CountInSound.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -33,7 +35,9 @@
 		000000000000000000000302 /* PolyphonicCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolyphonicCore.swift; sourceTree = "<group>"; };
 		000000000000000000000303 /* MIDIInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MIDIInput.swift; sourceTree = "<group>"; };
 		000000000000000000000304 /* GrandStaffView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrandStaffView.swift; sourceTree = "<group>"; };
-		2DBE59C330A5ECE50029DBD3 /* File.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = File.txt; sourceTree = "<group>"; };
+		000000000000000000000305 /* OnsetsProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnsetsProtocol.swift; sourceTree = "<group>"; };
+		000000000000000000000306 /* OnsetsVelocitiesClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnsetsVelocitiesClient.swift; sourceTree = "<group>"; };
+		000000000000000000000307 /* CountInSound.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CountInSound.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -58,11 +62,13 @@
 		000000000000000000000003 /* PianoBloom */ = {
 			isa = PBXGroup;
 			children = (
+				000000000000000000000305 /* OnsetsProtocol.swift */,
+				000000000000000000000306 /* OnsetsVelocitiesClient.swift */,
+				000000000000000000000307 /* CountInSound.swift */,
 				000000000000000000000304 /* GrandStaffView.swift */,
 				000000000000000000000303 /* MIDIInput.swift */,
 				000000000000000000000302 /* PolyphonicCore.swift */,
 				000000000000000000000301 /* HanonScores.swift */,
-				2DBE59C330A5ECE50029DBD3 /* File.txt */,
 				000000000000000000000300 /* ScoreCore.swift */,
 				000000000000000000000007 /* PianoBloomApp.swift */,
 				000000000000000000000008 /* Info.plist */,
@@ -133,7 +139,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2DBE59C430A5ECE50029DBD3 /* File.txt in Resources */,
 				0000000000000000000000CB /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -145,6 +150,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				000000000000000000000405 /* OnsetsProtocol.swift in Sources */,
+				000000000000000000000406 /* OnsetsVelocitiesClient.swift in Sources */,
+				000000000000000000000407 /* CountInSound.swift in Sources */,
 				000000000000000000000404 /* GrandStaffView.swift in Sources */,
 				000000000000000000000403 /* MIDIInput.swift in Sources */,
 				000000000000000000000402 /* PolyphonicCore.swift in Sources */,

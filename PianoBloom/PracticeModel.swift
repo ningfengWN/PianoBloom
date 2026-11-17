@@ -24,11 +24,11 @@ final class PracticeModel: ObservableObject {
     @Published private(set) var score = PianoScore.all[0]
     @Published private(set) var hands: PracticeHands = .both
     @Published private(set) var style: PlayStyle = .follow
-    @Published private(set) var practiceMode: PracticeMode = .reading
+    @Published private(set) var practiceMode: PracticeMode = .performance
     @Published private(set) var input: PianoInput = .microphone
     @Published private(set) var bpm = 60.0
     @Published private(set) var sectionBar: Int?
-    @Published private(set) var performance = Performance(score: PianoScore.all[0], hands: .both, style: .follow, bpm: 60)
+    @Published private(set) var performance = Performance(score: PianoScore.all[0], hands: .both, style: .follow, bpm: 60, waitForCorrect: true)
     @Published private(set) var heard = Set<Int>()
     @Published private(set) var feedback = "小兔准备好啦，一起弹琴吧！"
     @Published private(set) var reference: Double
@@ -48,12 +48,27 @@ final class PracticeModel: ObservableObject {
     @Published private(set) var demoPosition = 0
     @Published private(set) var demoBeat = 0.0
     @Published var notationScale: Double { didSet { defaults.set(notationScale, forKey: "notationScale") } }
+    @Published var countdownSound: Bool { didSet { defaults.set(countdownSound, forKey: "countdownSound") } }
+    @Published var recognitionEngine: RecognitionEngine { didSet { defaults.set(recognitionEngine.rawValue, forKey: "recognitionEngine") } }
+    @Published var modelAddress: String { didSet { defaults.set(modelAddress, forKey: "modelAddress") } }
+    @Published var modelToken: String { didSet { defaults.set(modelToken, forKey: "modelToken") } }
+    private let countInSound = CountInSound()
     @Published var voiceHints: Bool { didSet { defaults.set(voiceHints, forKey: "voiceHints") } }
     private let demonstrator = PianoDemonstrator()
     private var demoTimer: Timer?
     private var demoScore: PianoScore?
     var visualPosition: Int { demonstrating ? demoPosition : performance.position }
-    var visualBeat: Double { demonstrating ? demoBeat : beat }
+    var usesOnsetsModel: Bool { input == .microphone && recognitionEngine == .onsetsVelocities }
+    var visualBeat: Double {
+        if demonstrating { return demoBeat }
+        if usesOnsetsModel && running, let through = microphone.processedThrough { return performance.beat(at: through) }
+        return beat
+    }
+    private var scoringTime: Double {
+        if usesOnsetsModel { return microphone.processedThrough ?? ((performance.epoch ?? now) - 1) }
+        return now - (input == .microphone ? 0.25 : 0.02)
+    }
+    private var pauseTime: Double { usesOnsetsModel ? min(now, microphone.processedThrough ?? now) : now }
     var flowReview: FlowReview { FlowReview(score: performance.score, judgments: performance.judgments) }
     var displayMap: ScoreDisplayMap { ScoreDisplayMap(score: score, sectionBar: sectionBar) }
     var notationPosition: Int { displayMap.globalIndex(visualPosition) ?? score.events.count }
@@ -93,10 +108,18 @@ final class PracticeModel: ObservableObject {
         guard performance.position < performance.score.events.count else { return [] }
         return performance.score.events[performance.position].pitches(hands)
     }
-    var inputDescription: String { input == .midi ? midi.message : (hands == .both ? "麦克风双手 · 测试模式" : "麦克风识音") }
+    var inputDescription: String {
+        if input == .midi { return midi.message }
+        if usesOnsetsModel { return "O&V · Mac 实验引擎 · 延迟 " + String(format: "%.1f 秒", microphone.recognitionDelay) }
+        return "基础麦克风识音 · 实验模式"
+    }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        countdownSound = defaults.object(forKey: "countdownSound") == nil ? true : defaults.bool(forKey: "countdownSound")
+        recognitionEngine = RecognitionEngine(rawValue: defaults.string(forKey: "recognitionEngine") ?? "") ?? .basic
+        modelAddress = defaults.string(forKey: "modelAddress") ?? ""
+        modelToken = defaults.string(forKey: "modelToken") ?? ""
         let savedScale = defaults.double(forKey: "notationScale")
         notationScale = savedScale == 0 ? 1.35 : min(1.7, max(1, savedScale))
         voiceHints = defaults.object(forKey: "voiceHints") == nil ? true : defaults.bool(forKey: "voiceHints")
@@ -107,6 +130,12 @@ final class PracticeModel: ObservableObject {
         latencyMS = min(300, max(-300, defaults.double(forKey: "latencyMS")))
         if let data = defaults.data(forKey: "results"), let history = try? JSONDecoder().decode([PracticeResult].self, from: data) { results = history }
         microphone.onFrame = { [weak self] in self?.receive($0) }
+        microphone.onModelEvents = { [weak self] events in
+            guard let self else { return }
+            self.heard = Set(events.last?.notes ?? [])
+            guard self.running, self.input == .microphone else { return }
+            for event in events where self.running { self.accept(Set(event.notes), at: event.time) }
+        }
         microphone.onReady = { [weak self] in if self?.calibrating == false && self?.exploring == false { self?.beginClock() } }
         microphone.onStop = { [weak self] in self?.didStop() }
         midi.onNote = { [weak self] note, on, time in
@@ -126,7 +155,7 @@ final class PracticeModel: ObservableObject {
             for (index, event) in performance.score.events.prefix(6).enumerated() {
                 _ = performance.play(event.pitches(hands), at: start + Double(score.beatsPerBar) * 60 / bpm + Double(index) * 0.3)
             }
-            now = ProcessInfo.processInfo.systemUptime; performance.pause(at: now)
+            now = ProcessInfo.processInfo.systemUptime; performance.pause(at: pauseTime)
             lastGrade = .perfect; feedback = "界面预览 · 绿色小花为测试音符示例"
             return
         }
@@ -140,7 +169,7 @@ final class PracticeModel: ObservableObject {
         pause()
         guided = false
         if let hands { self.hands = hands }
-        if let style { self.style = style; practiceMode = style == .follow ? .reading : .rhythm }
+        if let style { self.style = style; practiceMode = style == .follow ? .performance : .flow }
         if let input { self.input = input }
         if let bpm { self.bpm = min(120, max(30, bpm)) }
         restart()
@@ -191,7 +220,7 @@ final class PracticeModel: ObservableObject {
     func beginFree() { pause(); guided = false }
     private func applyJourney() {
         hands = journey.stage.hands; style = journey.stage.style
-        practiceMode = journey.stage == .concert ? .performance : (journey.stage == .flow ? .flow : .reading)
+        practiceMode = style == .follow ? .performance : .flow
         sectionBar = journey.wholeSong ? nil : journey.phrase * 2
         restart(); feedback = journey.stage.instruction
         if voiceHints { demonstrator.speak(journey.stage.instruction) }
@@ -245,6 +274,7 @@ final class PracticeModel: ObservableObject {
             midi.start()
             if midi.listening { beginClock() } else { feedback = midi.message }
         } else {
+            prepareMicrophone()
             microphone.polyphonic = hands == .both
             microphone.reference = reference
             microphone.start()
@@ -254,6 +284,10 @@ final class PracticeModel: ObservableObject {
         guard !running else { return }
         now = ProcessInfo.processInfo.systemUptime
         performance.start(at: now); running = true; startedAt = now
+        if countdownSound {
+            countInSound.play(beats: score.beatsPerBar, secondsPerBeat: performance.secondsPerBeat,
+                              remaining: max(0, (performance.epoch ?? now) - now))
+        }
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in self?.tick() }
         feedback = "预备，一起数拍子。"
@@ -262,7 +296,7 @@ final class PracticeModel: ObservableObject {
         now = ProcessInfo.processInfo.systemUptime
         guard running else { return }
         let before = performance.missedCount
-        performance.tick(at: now - (input == .microphone ? 0.25 : 0.02))
+        performance.tick(at: scoringTime - (usesOnsetsModel ? latencyMS / 1000 + 0.02 : 0))
         if performance.missedCount > before {
             lastGrade = .missed
             feedback = practiceMode == .flow ? "保持音乐向前，结束后一起看需要练习的小节。" : "这颗星星先放过，跟上下一拍吧。"
@@ -271,9 +305,10 @@ final class PracticeModel: ObservableObject {
         else if beat >= 0, feedback == "预备，一起数拍子。" { feedback = style == .follow ? "请弹亮起来的音符。" : "跟着节拍，让星星亮起来。" }
     }
     func pause() {
+        countInSound.stop()
         demonstrating = false; demoTimer?.invalidate(); demoTimer = nil; demoScore = nil; demonstrator.stop()
         now = ProcessInfo.processInfo.systemUptime
-        performance.pause(at: now)
+        performance.pause(at: pauseTime)
         if let startedAt { elapsed += max(0, now - startedAt) }
         startedAt = nil; running = false
         timer?.invalidate(); timer = nil
@@ -281,8 +316,9 @@ final class PracticeModel: ObservableObject {
         heard = []; gate.reset(); polyGate.reset()
     }
     private func didStop() {
+        countInSound.stop()
         if running {
-            now = ProcessInfo.processInfo.systemUptime; performance.pause(at: now)
+            now = ProcessInfo.processInfo.systemUptime; performance.pause(at: pauseTime)
             if let startedAt { elapsed += max(0, now - startedAt) }
             startedAt = nil; running = false; timer?.invalidate(); timer = nil
             feedback = "聆听暂停了，准备好后可以继续。"
@@ -290,13 +326,22 @@ final class PracticeModel: ObservableObject {
         calibrating = false; exploring = false; calibrationTimer?.invalidate(); calibrationTimer = nil
         heard = []; gate.reset(); polyGate.reset()
     }
+    private func prepareMicrophone() {
+        microphone.recognitionEngine = recognitionEngine
+        microphone.modelAddress = modelAddress; microphone.modelToken = modelToken
+    }
+    func selectRecognitionEngine(_ engine: RecognitionEngine) {
+        pause(); recognitionEngine = engine
+    }
     func explore() {
         pause(); exploring = true
+        prepareMicrophone()
         microphone.polyphonic = false; microphone.reference = reference
         microphone.start()
     }
     func calibrate() {
         pause(); calibrator.reset(); calibrating = true
+        microphone.recognitionEngine = .basic // Single-frequency calibration, never used as the O&V engine.
         microphone.polyphonic = false
         feedback = "请弹中央 C（C4），保持一秒，不要踩踏板。"
         let deadline = ProcessInfo.processInfo.systemUptime + 15
@@ -359,7 +404,7 @@ final class PracticeModel: ObservableObject {
         let result = PracticeResult(title: score.title + (sectionBar.map { " · 第 \($0 + 1) 小节起" } ?? ""), date: Date(), count: performance.correctCount,
                                     mistakes: performance.mistakes, accuracy: performance.pitchScore, seconds: seconds,
                                     rhythm: performance.rhythmScore, missed: performance.missedCount, hands: hands.rawValue,
-                                    source: input == .microphone ? "麦克风估算" : "MIDI",
+                                    source: input == .microphone ? (usesOnsetsModel ? "O&V Mac 估算" : "麦克风估算") : "MIDI",
                                     early: performance.earlyCount, late: performance.lateCount, mode: practiceMode.rawValue,
                                     stallSections: practiceMode == .flow ? flowReview.stallSections : nil,
                                     denseErrorSections: practiceMode == .flow ? flowReview.denseErrorSections : nil)

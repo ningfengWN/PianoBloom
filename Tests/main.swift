@@ -246,8 +246,8 @@ let mappedJudgments = excerptMap.judgments([0: EventJudgment(grade: .perfect, er
 check(mappedJudgments[excerptMap.indices[0]]?.grade == .perfect && mappedJudgments[0] == nil, "played flower appears on global note, not first row")
 check(excerptMap.positions([0]) == [excerptMap.indices[0]], "mistake review aligns with the complete score")
 check(ScoreDisplayMap(score: displayScore, sectionBar: 999).indices.isEmpty, "out of range excerpt safely maps no notes")
-check(PracticeMode.allCases.count == 4 && PracticeMode.performance.style == .follow && PracticeMode.performance.waitsForCorrect, "performance mode directly selectable with correction waiting")
-check(PracticeMode.reading.style == .follow && PracticeMode.rhythm.style == .rhythm, "independent practice modes map to existing scoring engines")
+check(PracticeMode.allCases.count == 2 && PracticeMode.performance.style == .follow && PracticeMode.performance.waitsForCorrect, "performance mode directly selectable with correction waiting")
+check(PracticeMode.performance.style == .follow && PracticeMode.flow.style == .rhythm, "independent practice modes map to existing scoring engines")
 // Performance waits for correction without stopping input; flow keeps its fixed grid.
 var waitingPerformance = Performance(score: pair, hands: .both, style: PracticeMode.performance.style, bpm: 60, waitForCorrect: PracticeMode.performance.waitsForCorrect)
 waitingPerformance.start(at: 0)
@@ -277,4 +277,20 @@ let quickRun = PianoScore(id: "fast", title: "Fast", detail: "", beatsPerBar: 4,
 check(FlowReview(score: quickRun, judgments: [0: omission, 1: omission]).grayPositions.isEmpty, "brief pair of sixteenth misses stays red")
 check(FlowReview(score: quickRun, judgments: [0: omission, 1: omission, 2: omission, 3: omission]).stalledPositions.count == 4, "full beat of consecutive misses forms hesitation")
 check(missed.judgments[0]?.grade == .missed && missed.rhythmScore == 33, "annotation review preserves original timing and pitch grades")
+// The ML client only accepts the pinned model and monotonic capture-time events.
+let readyJSON = """
+{"type":"ready","model":"Onsets & Velocities","protocol":1,"source_commit":"\(OnsetsServerMessage.source)","checkpoint_sha256":"\(OnsetsServerMessage.checkpoint)","minimum_delay":0.736}
+"""
+let decodedReady = try! JSONDecoder().decode(OnsetsServerMessage.self, from: Data(readyJSON.utf8))
+check(decodedReady.validReady(), "real model handshake identifies pinned checkpoint and source")
+let eventJSON = """
+{"type":"events","events":[{"time":1.25,"notes":[60,64]}],"processed_through":1.4,"captured_through":2.2,"inference_ms":120}
+"""
+let decodedEvents = try! JSONDecoder().decode(OnsetsServerMessage.self, from: Data(eventJSON.utf8))
+check(decodedEvents.validEvents(after: 1.1) && !decodedEvents.validEvents(after: 1.5), "ML watermark cannot move backwards")
+let invalidNotes = eventJSON.replacingOccurrences(of: "[60,64]", with: "[60,60]")
+check(!(try! JSONDecoder().decode(OnsetsServerMessage.self, from: Data(invalidNotes.utf8))).validEvents(after: 1.1), "duplicate model chord notes are rejected")
+let futureNotes = eventJSON.replacingOccurrences(of: "1.25", with: "1.6")
+check(!(try! JSONDecoder().decode(OnsetsServerMessage.self, from: Data(futureNotes.utf8))).validEvents(after: 1.1), "unprocessed model onsets cannot be graded")
+check(PracticeMode.allCases.map(\.rawValue) == ["演奏", "心流"], "exactly two child-facing practice modes")
 print("PASS: \(checks) production core checks")
