@@ -293,4 +293,32 @@ check(!(try! JSONDecoder().decode(OnsetsServerMessage.self, from: Data(invalidNo
 let futureNotes = eventJSON.replacingOccurrences(of: "1.25", with: "1.6")
 check(!(try! JSONDecoder().decode(OnsetsServerMessage.self, from: Data(futureNotes.utf8))).validEvents(after: 1.1), "unprocessed model onsets cannot be graded")
 check(PracticeMode.allCases.map(\.rawValue) == ["演奏", "心流"], "exactly two child-facing practice modes")
+// Solfege: one melodic line, independent human-voice pitch/rhythm judgments.
+let singingScore = PianoScore(id: "singing-test", title: "Sing", detail: "", beatsPerBar: 4, events: [
+    ScoreEvent(beat: 0, duration: 1, right: [60], left: [48]),
+    ScoreEvent(beat: 1, duration: 1, right: [64], left: [52])])
+var singing = SingingAssessment(score: singingScore, hand: .right, bpm: 60, octave: 0)
+for time in [0.25,0.50,0.75] { singing.accept(frequency: Music.frequency(60), rms: 0.1, time: time, onset: 0) }
+singing.tick(1.11)
+check(singing.position == 1 && singing.results[0]?.pitchScore == 100, "voice pitch uses measured frequency against selected melody")
+for time in [1.25,1.50,1.75] { singing.accept(frequency: Music.frequency(62), rms: 0.1, time: time, onset: 1.2) }
+singing.tick(2.11)
+check(singing.results[1]?.grade == .wrong && singing.pitchScore == 50, "wrong sung pitch remains wrong even when rhythm is observed")
+check(singing.rhythmScore != nil && singing.timingCount == 2, "syllable timing is reported separately")
+var silentSinging = SingingAssessment(score: singingScore, hand: .right, bpm: 60, octave: 0)
+silentSinging.tick(2.2)
+check(silentSinging.pitchScore == 0 && silentSinging.rhythmScore == nil, "silence cannot manufacture a voice or rhythm score")
+let leftSinging = SingingAssessment(score: singingScore, hand: .left, bpm: 120, octave: 1)
+check(leftSinging.notes[0].midi == 60 && leftSinging.notes[1].start == 0.5, "singing hand, octave and tempo are explicit")
+check(Solfege.name(71) == "Si" && Solfege.name(61) == "♯Do", "fixed-do names cover accidentals")
+let voiceSource = SolfegeVoiceSample(samples: (0..<16000).map { i in
+    let phase = 2 * Double.pi * 220 * Double(i) / 16000
+    return Float(sin(phase) * 0.4 + sin(phase * 2) * 0.18 + sin(phase * 4) * 0.1)
+}, sampleRate: 16000)
+if let sung = SolfegeVoiceRenderer.render(voiceSource, midi: 60, duration: 0.6) {
+    check(sung.count == 9600, "sung syllable lasts the requested score duration")
+    let f = PitchDetector.analyze(Array(sung[3200..<5248]), sampleRate: 16000, time: 0).frequency
+    check(f.map { abs($0 / Music.frequency(60) - 1) < 0.03 } ?? false, "PSOLA tunes voiced syllable to actual note pitch, not speech pitch multiplier")
+} else { check(false, "voiced syllable renders") }
+check(SolfegeVoiceRenderer.render(SolfegeVoiceSample(samples: [Float](repeating: 0, count: 16000), sampleRate: 16000), midi: 60, duration: 1) == nil, "unavailable voice is rejected instead of being replaced with a piano tone")
 print("PASS: \(checks) production core checks")

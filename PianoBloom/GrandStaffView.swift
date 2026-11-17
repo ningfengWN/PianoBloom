@@ -60,7 +60,7 @@ struct GrandStaffView: View {
     }
 }
 
-private struct PlayedNotePop: Identifiable {
+struct PlayedNotePop: Identifiable {
     let id = UUID()
     let index: Int
     let wrong: Bool
@@ -95,7 +95,7 @@ private struct NotePopView: View {
     }
 }
 
-private struct StaffSystem: View {
+struct StaffSystem: View {
     let score: PianoScore
     let start: Int
     let count: Int

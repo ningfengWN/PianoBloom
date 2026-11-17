@@ -184,6 +184,7 @@ private final class StreamAnalyzer {
         if level > max(0.005, envelope * 1.7) { onsetTime = endTime - Double(short.count) / rate }
         envelope = max(level, envelope * 0.87)
         var frame = PitchDetector.analyze(Array(window.suffix(2048)), sampleRate: rate, time: endTime)
+        if let onsetTime, endTime - onsetTime < 0.22 { frame.onsetTime = onsetTime }
         if polyphonic {
             var poly = PolyphonicDetector.analyze(window, sampleRate: rate, reference: reference, time: endTime)
             if let onsetTime, endTime - onsetTime < 0.22 { poly.onsetTime = onsetTime }

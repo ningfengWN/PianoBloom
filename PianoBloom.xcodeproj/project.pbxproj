@@ -20,6 +20,9 @@
 		000000000000000000000405 /* OnsetsProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000305 /* OnsetsProtocol.swift */; };
 		000000000000000000000406 /* OnsetsVelocitiesClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000306 /* OnsetsVelocitiesClient.swift */; };
 		000000000000000000000407 /* CountInSound.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000307 /* CountInSound.swift */; };
+		000000000000000000000408 /* SolfegeCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000308 /* SolfegeCore.swift */; };
+		000000000000000000000409 /* SolfegeModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000309 /* SolfegeModel.swift */; };
+		00000000000000000000040A /* SolfegeScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000030A /* SolfegeScreen.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -38,6 +41,9 @@
 		000000000000000000000305 /* OnsetsProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnsetsProtocol.swift; sourceTree = "<group>"; };
 		000000000000000000000306 /* OnsetsVelocitiesClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnsetsVelocitiesClient.swift; sourceTree = "<group>"; };
 		000000000000000000000307 /* CountInSound.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CountInSound.swift; sourceTree = "<group>"; };
+		000000000000000000000308 /* SolfegeCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SolfegeCore.swift; sourceTree = "<group>"; };
+		000000000000000000000309 /* SolfegeModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SolfegeModel.swift; sourceTree = "<group>"; };
+		00000000000000000000030A /* SolfegeScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SolfegeScreen.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -65,6 +71,9 @@
 				000000000000000000000305 /* OnsetsProtocol.swift */,
 				000000000000000000000306 /* OnsetsVelocitiesClient.swift */,
 				000000000000000000000307 /* CountInSound.swift */,
+				000000000000000000000308 /* SolfegeCore.swift */,
+				000000000000000000000309 /* SolfegeModel.swift */,
+				00000000000000000000030A /* SolfegeScreen.swift */,
 				000000000000000000000304 /* GrandStaffView.swift */,
 				000000000000000000000303 /* MIDIInput.swift */,
 				000000000000000000000302 /* PolyphonicCore.swift */,
@@ -153,6 +162,9 @@
 				000000000000000000000405 /* OnsetsProtocol.swift in Sources */,
 				000000000000000000000406 /* OnsetsVelocitiesClient.swift in Sources */,
 				000000000000000000000407 /* CountInSound.swift in Sources */,
+				000000000000000000000408 /* SolfegeCore.swift in Sources */,
+				000000000000000000000409 /* SolfegeModel.swift in Sources */,
+				00000000000000000000040A /* SolfegeScreen.swift in Sources */,
 				000000000000000000000404 /* GrandStaffView.swift in Sources */,
 				000000000000000000000403 /* MIDIInput.swift in Sources */,
 				000000000000000000000402 /* PolyphonicCore.swift in Sources */,

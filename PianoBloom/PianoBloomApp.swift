@@ -32,6 +32,7 @@ struct GardenHome: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var performing = false
     @State private var freeListening = false
+    @State private var solfege = false
     @State private var settings = false
     @State private var history = false
     @State private var hanon = false
@@ -66,7 +67,8 @@ struct GardenHome: View {
             .sheet(isPresented: $freeListening) { FreeListeningView(model: model) }
             .sheet(isPresented: $settings) { ParentSettings(model: model) }
             .sheet(isPresented: $history) { HistoryView(model: model) }
-            .fullScreenCover(isPresented: $performing) { PerformanceScreen(model: model) }
+            .fullScreenCover(isPresented: $solfege) { SolfegeScreen(score: model.currentScore, bpm: model.bpm, countdownSound: model.countdownSound) }
+        .fullScreenCover(isPresented: $performing) { PerformanceScreen(model: model) }
             .onAppear {
                 #if DEBUG
                 if ProcessInfo.processInfo.arguments.contains("--preview-performance") {
@@ -116,6 +118,9 @@ struct GardenHome: View {
                 Stepper("\(Int(model.bpm)) BPM", value: Binding(get: { model.bpm }, set: { model.configure(bpm: $0) }), in: 30...120, step: 5)
                     .font(.subheadline.monospacedDigit())
             }.font(.subheadline)
+            Button { model.pause(); solfege = true } label: {
+                Label("唱谱 · 听示范 / 我来唱", systemImage: "music.mic").font(.subheadline.bold())
+            }
             InputSelector(model: model)
             if model.score.isHanon {
                 Menu {
@@ -217,6 +222,7 @@ private struct InputSelector: View {
 struct PerformanceScreen: View {
     @ObservedObject var model: PracticeModel
     @State private var showKeyboard = true
+    @State private var solfege = false
     @State private var showReview = false
     @State private var showScoreSettings = false
     @ObservedObject private var microphone: Microphone
@@ -258,6 +264,7 @@ struct PerformanceScreen: View {
                 .overlay { if model.showResult { ResultGarden(model: model) { model.showResult = false; dismiss() } } }
         }
         .tint(Bloom.pink).interactiveDismissDisabled()
+        .fullScreenCover(isPresented: $solfege) { SolfegeScreen(score: model.currentScore, bpm: model.bpm, countdownSound: model.countdownSound) }
         .sheet(isPresented: $showReview) { PracticeLegend() }
         .popover(isPresented: $showScoreSettings) { scoreSettings.padding(24).frame(minWidth: 280) }
          .onAppear {
@@ -377,6 +384,7 @@ struct PerformanceScreen: View {
                 model.demonstrating ? model.pause() : model.demonstrate()
             }
             toolButton("琴键", icon: "pianokeys", active: showKeyboard) { showKeyboard.toggle() }
+            toolButton("唱谱", icon: "music.mic", active: false) { model.pause(); solfege = true }
             toolButton("设置", icon: "gearshape.fill", active: false) { model.pause(); showScoreSettings = true }
             if !wide { Spacer(minLength: 0) }
         }.padding(.horizontal, wide ? 20 : 12).padding(.vertical, wide ? 8 : 6)
@@ -580,7 +588,7 @@ private struct ParentSettings: View {
                     Text("基础识音在设备处理。选择 O&V Mac 引擎时，声音发送到你填写的 Mac 地址，在内存处理，不保存录音。")
                 }
                 Section("琴谱与署名") {
-                    Text("PianoBloom 2.6 · 双模式与模型接入")
+                    Text("PianoBloom 2.7 · 唱谱小舞台")
                     Text("哈农 1–20：Steve Taylor / Javier Ruiz-Alma，Mutopia，CC BY-SA 4.0。保留双手、时值，展开原谱反复。启蒙双手曲为本 App 教学改编。")
                     Link("查看曲谱来源", destination: URL(string: "https://www.mutopiaproject.org/ftp/HanonCL/virtuoso-pianist-pt1/")!)
                 }
