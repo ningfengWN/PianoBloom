@@ -26,8 +26,8 @@ private enum ScanKey {
 enum PhotoScoreStore {
     static var folder: URL { FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("PhotoScores", isDirectory: true) }
     static func load() -> [PhotoScoreRecord] {
-        let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
-        return files.filter { $0.pathExtension == "json" }.sorted { $0.lastPathComponent < $1.lastPathComponent }.compactMap { url in
+        let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        return files.filter { $0.pathExtension == "json" }.sorted { ((try? $0.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast) < ((try? $1.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast) }.compactMap { url in
             guard let data = try? Data(contentsOf: url), let record = try? JSONDecoder().decode(PhotoScoreRecord.self, from: data), record.id.hasPrefix("photo-"), UUID(uuidString: String(record.id.dropFirst(6))) != nil, record.photoCount >= 1, record.photoCount <= 4, url.lastPathComponent == record.id + ".json", (try? record.draft.score(id: record.id)) != nil else { return nil }
             return record
         }
@@ -104,7 +104,7 @@ struct PhotoScoreImport: View {
                     ForEach(photos.indices, id: \.self) { index in
                         VStack {
                             if let image = UIImage(data: photos[index]) { Image(uiImage: image).resizable().scaledToFit().frame(maxHeight: 240) }
-                            Button("移除第\(index + 1)页", role: .destructive) { photos.remove(at: index); invalidateResult() }.buttonStyle(.borderless).disabled(busy)
+                            Button("移除第\(index + 1)页", role: .destructive) { if photos.indices.contains(index) { photos.remove(at: index); invalidateResult() } }.buttonStyle(.borderless).disabled(busy)
                         }
                     }
                 }
@@ -162,13 +162,13 @@ struct PhotoScoreImport: View {
             if beatUnit != 4 { Text("识别到非四分音符拍号，目前不能保存此拍号。请使用支持的谱页。").foregroundStyle(.red) }
             ForEach(warnings, id: \.self) { Text($0).font(.caption).foregroundStyle(.orange) }
             Text("核对起音时间、左右手及和弦。音高写 C4、F#4、Bb3；和弦用空格分隔。拍点从 0 开始，休止保留为拍点间隔。识别谱按起音对齐，原谱的连音线、独立声部时值等排版可能简化。").font(.caption)
-            ForEach(rows.indices, id: \.self) { index in
+            ForEach($rows) { $row in
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("第\(index + 1)组起音").font(.caption.bold())
-                    HStack { TextField("拍点", text: $rows[index].beat); TextField("时值", text: $rows[index].duration) }.keyboardType(.decimalPad)
-                    TextField("右手，例如 C4 E4", text: $rows[index].right).textInputAutocapitalization(.characters)
-                    TextField("左手，例如 C3", text: $rows[index].left).textInputAutocapitalization(.characters)
-                    Button("删除此组", role: .destructive) { rows.remove(at: index); reviewed = false }.buttonStyle(.borderless)
+                    Text("起音 · 拍点 \(row.beat)").font(.caption.bold())
+                    HStack { TextField("拍点", text: $row.beat); TextField("时值", text: $row.duration) }.keyboardType(.decimalPad)
+                    TextField("右手，例如 C4 E4", text: $row.right).textInputAutocapitalization(.characters)
+                    TextField("左手，例如 C3", text: $row.left).textInputAutocapitalization(.characters)
+                    Button("删除此组", role: .destructive) { let id = row.id; rows.removeAll { $0.id == id }; reviewed = false }.buttonStyle(.borderless)
                 }.disabled(busy)
             }
             Button("手动添加音组") { rows.append(EditableScoreEvent(beat: rows.last.map { (Double($0.beat) ?? 0) + (Double($0.duration) ?? 1) } ?? 0)); reviewed = false }.disabled(busy)
@@ -215,7 +215,8 @@ struct PhotoScoreImport: View {
     }
 }
 
-private struct EditableScoreEvent: Equatable {
+private struct EditableScoreEvent: Equatable, Identifiable {
+    let id = UUID()
     var beat: String
     var duration: String
     var right: String

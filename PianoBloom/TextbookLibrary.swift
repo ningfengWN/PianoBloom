@@ -67,7 +67,7 @@ private struct TextbookContents: View {
                             Spacer()
                             VStack(alignment: .trailing, spacing: 5) {
                                 Text("第\(entry.page)页").font(.caption.bold()).foregroundStyle(Bloom.lilac)
-                                if let record = model.photoScores.first(where: { $0.bookID == book.id && $0.entryID == entry.id }), let score = try? record.draft.score(id: record.id) {
+                                if let record = model.photoScores.last(where: { $0.bookID == book.id && $0.entryID == entry.id }), let score = try? record.draft.score(id: record.id) {
                                     Button("练这首") { model.select(score); model.beginFree(); performing = true }.buttonStyle(.borderedProminent)
                                 } else {
                                     Button("拍照录入") { importEntry = entry }.buttonStyle(.bordered)
