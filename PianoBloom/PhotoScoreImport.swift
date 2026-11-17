@@ -11,11 +11,15 @@ private enum ScanKey {
         var value: CFTypeRef?; guard SecItemCopyMatching(q as CFDictionary, &value) == errSecSuccess, let data = value as? Data else { return "" }
         return String(data: data, encoding: .utf8) ?? ""
     }
-    static func save(_ key: String) {
-        SecItemDelete(query as CFDictionary)
-        guard !key.isEmpty else { return }
-        var q = query; q[kSecValueData as String] = Data(key.utf8); q[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        SecItemAdd(q as CFDictionary, nil)
+    static func save(_ key: String) -> Bool {
+        if key.isEmpty {
+            let status = SecItemDelete(query as CFDictionary)
+            return status == errSecSuccess || status == errSecItemNotFound
+        }
+        let attributes: [String: Any] = [kSecValueData as String: Data(key.utf8), kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly]
+        let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        if status != errSecItemNotFound { return status == errSecSuccess }
+        return SecItemAdd(query.merging(attributes) { _, new in new } as CFDictionary, nil) == errSecSuccess
     }
 }
 
@@ -95,12 +99,12 @@ struct PhotoScoreImport: View {
                     HStack {
                         Button { camera = true } label: { Label("拍照扫描", systemImage: "camera") }.disabled(!VNDocumentCameraViewController.isSupported || photos.count >= 4 || busy)
                         PhotosPicker(selection: $selection, maxSelectionCount: max(1, 4 - photos.count), matching: .images) { Label("从相册选择", systemImage: "photo") }.disabled(photos.count >= 4 || busy)
-                    }
+                    }.buttonStyle(.borderless)
                     if !VNDocumentCameraViewController.isSupported { Text("此设备无法使用扫描相机，请从相册选择照片。").font(.caption) }
                     ForEach(photos.indices, id: \.self) { index in
                         VStack {
                             if let image = UIImage(data: photos[index]) { Image(uiImage: image).resizable().scaledToFit().frame(maxHeight: 240) }
-                            Button("移除第\(index + 1)页", role: .destructive) { photos.remove(at: index); invalidateResult() }.disabled(busy)
+                            Button("移除第\(index + 1)页", role: .destructive) { photos.remove(at: index); invalidateResult() }.buttonStyle(.borderless).disabled(busy)
                         }
                     }
                 }
@@ -108,7 +112,10 @@ struct PhotoScoreImport: View {
                     DisclosureGroup("OpenAI 识谱设置") {
                         SecureField("OpenAI API Key", text: $key).textInputAutocapitalization(.never).autocorrectionDisabled()
                         TextField("支持图像的模型", text: $scanModel).textInputAutocapitalization(.never).autocorrectionDisabled()
-                        Button("保存 Key 到本机钥匙串") { ScanKey.save(key.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                        Button("保存 Key 到本机钥匙串") {
+                            let savedKey = key.trimmingCharacters(in: .whitespacesAndNewlines)
+                            message = ScanKey.save(savedKey) ? (savedKey.isEmpty ? "已清除保存的 Key。" : "Key 已保存到本机钥匙串。") : "Key 未能保存，请稍后重试。"
+                        }
                         Text("仅点击下方识别按钮时向 OpenAI 发送所选照片，可能产生 API 费用。照片和核对后的曲谱保存在本机。AI 识谱可能出错，必须对照原谱核对。").font(.caption)
                     }
                     if quotaStopped {
@@ -133,12 +140,13 @@ struct PhotoScoreImport: View {
             .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("收起键盘") { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) } } }
             .onChange(of: selection) { items in
                 guard !items.isEmpty else { return }
+                busy = true
                 task = Task { @MainActor in
                     for item in items.prefix(max(0, 4 - photos.count)) {
                         guard !Task.isCancelled else { return }
                         if let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data), let normalized = prepareImage(image) { photos.append(normalized) }
                     }
-                    invalidateResult(); selection = []
+                    invalidateResult(); selection = []; busy = false
                 }
             }
             .onChange(of: rows) { _ in reviewed = false }
@@ -160,7 +168,7 @@ struct PhotoScoreImport: View {
                     HStack { TextField("拍点", text: $rows[index].beat); TextField("时值", text: $rows[index].duration) }.keyboardType(.decimalPad)
                     TextField("右手，例如 C4 E4", text: $rows[index].right).textInputAutocapitalization(.characters)
                     TextField("左手，例如 C3", text: $rows[index].left).textInputAutocapitalization(.characters)
-                    Button("删除此组", role: .destructive) { rows.remove(at: index); reviewed = false }
+                    Button("删除此组", role: .destructive) { rows.remove(at: index); reviewed = false }.buttonStyle(.borderless)
                 }.disabled(busy)
             }
             Button("手动添加音组") { rows.append(EditableScoreEvent(beat: rows.last.map { (Double($0.beat) ?? 0) + (Double($0.duration) ?? 1) } ?? 0)); reviewed = false }.disabled(busy)
