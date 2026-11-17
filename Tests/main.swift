@@ -389,4 +389,22 @@ let rateResponse = Data(#"{"error":{"code":"rate_limit_exceeded"}}"#.utf8)
 do { _ = try PhotoScoreResponse.decode(rateResponse, status: 429); check(false, "rate limit must end request") }
 catch PhotoScoreError.quota { check(false, "temporary rate limiting must not be labelled as an exhausted budget") }
 catch { check(true, "rate limit ends this request without automatic retry") }
+// Recorder teardown after playback activation must not close the newer audio session.
+let captureLease = AudioSessionOwnership.shared.claim(capturing: true)
+check(AudioSessionOwnership.shared.hasCapture, "count-in can reuse a live recording session")
+let previewLease = AudioSessionOwnership.shared.claim()
+check(!AudioSessionOwnership.shared.hasCapture, "playback replaces capture ownership even if an old recorder still exists")
+check(!AudioSessionOwnership.shared.release(captureLease), "a stale recorder cannot deactivate the current preview")
+check(AudioSessionOwnership.shared.release(previewLease), "the active session owner can release its own audio")
+check(!AudioSessionOwnership.shared.release(previewLease), "repeated idle stops do not deactivate audio")
+let previewWAV = try! PianoPreviewAudio.wav(score: PianoScore.starters[0].excerpt(0), hands: .both, bpm: 60)
+check(String(data: previewWAV.prefix(4), encoding: .ascii) == "RIFF" && previewWAV.count > 44, "preview generates a PCM WAV for the real player")
+var previewEnergy = 0.0
+for index in stride(from: 44, to: previewWAV.count - 1, by: 2) {
+    let word = UInt16(previewWAV[index]) | UInt16(previewWAV[index + 1]) << 8
+    let value = Double(Int16(bitPattern: word)) / 32768
+    previewEnergy += value * value
+}
+check(sqrt(previewEnergy / Double((previewWAV.count - 44) / 2)) > 0.02, "preview contains audible non-silent samples")
+check((try? PianoPreviewAudio.wav(score: repeatVoiceScore, hands: .left, bpm: 60)) == nil, "empty hand reports no notes instead of pretending to play silence")
 print("PASS: \(checks) production core checks")

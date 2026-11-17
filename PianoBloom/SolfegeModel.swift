@@ -142,6 +142,7 @@ final class SolfegeModel: ObservableObject {
     private let bank = SolfegeVoiceBank()
     private let countSound = CountInSound()
     private let renderQueue = DispatchQueue(label: "com.pianobloom.solfege.render", qos: .userInitiated)
+    private var playbackSessionToken: UUID?
     private var player: AVAudioPlayer?
     private var timer: Timer?
     private var epoch: Double?
@@ -199,11 +200,16 @@ final class SolfegeModel: ObservableObject {
         timer?.invalidate(); timer = nil
         player?.stop(); player = nil; bank.stop(); countSound.stop()
         microphone.stop()
+        if let token = playbackSessionToken {
+            playbackSessionToken = nil
+            if AudioSessionOwnership.shared.release(token) { try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation) }
+        }
     }
     private func prepareSong() {
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
             try AVAudioSession.sharedInstance().setActive(true)
+            playbackSessionToken = AudioSessionOwnership.shared.claim()
         } catch { feedback = error.localizedDescription; return }
         preparing = true; preparationFailed = false; preparationProgress = 0
         feedback = "正在准备中文唱名…"
@@ -266,6 +272,7 @@ final class SolfegeModel: ObservableObject {
                         do {
                             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
                             try AVAudioSession.sharedInstance().setActive(true)
+                            self.playbackSessionToken = AudioSessionOwnership.shared.claim()
                             self.player = try AVAudioPlayer(data: data)
                             guard let player = self.player, player.prepareToPlay(), player.play() else {
                                 self.failPreparation(SolfegeVoiceBank.VoiceError.playback, id: id); return

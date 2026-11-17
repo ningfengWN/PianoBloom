@@ -2,6 +2,7 @@ import AVFoundation
 
 /// One pre-rendered bar keeps countdown clicks on the audio clock, not a UI timer.
 final class CountInSound {
+    private var sessionToken: UUID?
     private var player: AVAudioPlayer?
     func play(beats: Int, secondsPerBeat: Double, remaining: Double, looping: Bool = false) {
         stop()
@@ -34,14 +35,22 @@ final class CountInSound {
         do {
             let session = AVAudioSession.sharedInstance()
             // Microphone sessions already use playAndRecord; never reconfigure a live input engine.
-            if session.category != .playAndRecord { try session.setCategory(.playback, mode: .default) }
+            let usesCapture = session.category == .playAndRecord && AudioSessionOwnership.shared.hasCapture
+            if !usesCapture { try session.setCategory(.playback, mode: .default) }
             try session.setActive(true)
+            if !usesCapture { sessionToken = AudioSessionOwnership.shared.claim() }
             player = try AVAudioPlayer(data: data)
             player?.volume = 1
             player?.numberOfLoops = looping ? -1 : 0
             player?.currentTime = min(duration - 1 / rate, max(0, duration - remaining))
             player?.prepareToPlay(); player?.play()
-        } catch { player = nil } // Visual countdown is retained if output is unavailable.
+        } catch { stop() } // Visual countdown is retained if output is unavailable.
     }
-    func stop() { player?.stop(); player = nil }
+    func stop() {
+        player?.stop(); player = nil
+        if let token = sessionToken {
+            sessionToken = nil
+            if AudioSessionOwnership.shared.release(token) { try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation) }
+        }
+    }
 }

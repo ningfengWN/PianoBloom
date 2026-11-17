@@ -283,20 +283,23 @@ final class PracticeModel: ObservableObject {
         do {
             try demonstrator.play(score: excerpt, hands: hands, bpm: bpm)
             demoScore = excerpt; demonstrating = true
-            let start = ProcessInfo.processInfo.systemUptime
+            feedback = demonstrator.outputDescription
             let offset = Double(globalBar - (sectionBar ?? 0)) * Double(score.beatsPerBar)
             demoBeat = offset; demoPosition = performance.score.events.firstIndex(where: { $0.beat >= offset }) ?? 0
             feedback = "正在听音符示范，键盘会同步亮起。"
             demoTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
                 guard let self else { return }
-                let beat = (ProcessInfo.processInfo.systemUptime - start) * self.bpm / 60
+                let beat = self.demonstrator.playbackTime * self.bpm / 60
                 self.demoBeat = offset + beat
                 if beat >= excerpt.length { self.pause(); self.feedback = "示范结束，轮到你来试试。"; return }
-                let index = excerpt.events.lastIndex(where: { $0.beat <= beat }) ?? 0
+                guard self.demonstrator.isPlaying else {
+                    self.pause(); self.feedback = "试听已中断，请重新点击试听，并检查音量和音频输出。"; return
+                }
+                guard let index = excerpt.events.lastIndex(where: { $0.beat <= beat }) else { self.heard = []; return }
                 self.demoPosition = self.performance.score.events.firstIndex(where: { $0.beat >= offset + excerpt.events[index].beat }) ?? 0
                 self.heard = excerpt.events[index].pitches(self.hands)
             }
-        } catch { feedback = "示范声音暂不可用，请检查设备声音设置。" }
+        } catch { demonstrator.stop(); feedback = error.localizedDescription }
     }
     func toggle() {
         if demonstrating { pause(); return }

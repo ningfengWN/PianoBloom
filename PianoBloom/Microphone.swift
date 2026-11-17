@@ -19,6 +19,7 @@ final class Microphone: ObservableObject {
     var polyphonic = false
     var reference = Music.standardC
     var onStop: (() -> Void)?
+    private var sessionToken: UUID?
     private var engine: AVAudioEngine?
     private var tapInstalled = false
     private var generation = UUID()
@@ -64,6 +65,7 @@ final class Microphone: ObservableObject {
             try session.setPreferredSampleRate(48000)
             try session.setPreferredIOBufferDuration(0.02)
             try session.setActive(true)
+            sessionToken = AudioSessionOwnership.shared.claim(capturing: true)
             let e = AVAudioEngine()
             engine = e
             let input = e.inputNode
@@ -144,7 +146,12 @@ final class Microphone: ObservableObject {
         engine = nil
         state = .stopped
         level = 0
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        if let token = sessionToken {
+            sessionToken = nil
+            if AudioSessionOwnership.shared.release(token) {
+                try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            }
+        }
         onStop?()
     }
 }
@@ -196,6 +203,7 @@ private final class StreamAnalyzer {
 
 /// Local note demonstration, not a prerecorded teacher video. Input is stopped before playback.
 final class PianoDemonstrator {
+    private var sessionToken: UUID?
     private var player: AVAudioPlayer?
     private let speaker = AVSpeechSynthesizer()
     func speak(_ text: String) {
@@ -203,52 +211,38 @@ final class PianoDemonstrator {
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
             try AVAudioSession.sharedInstance().setActive(true)
+            sessionToken = AudioSessionOwnership.shared.claim()
             let utterance = AVSpeechUtterance(string: text)
             utterance.voice = AVSpeechSynthesisVoice(language: "zh-CN")
             utterance.rate = 0.44
             speaker.speak(utterance)
         } catch { /* The same instruction remains visible when audio is unavailable. */ }
     }
+    var isPlaying: Bool { player?.isPlaying == true }
+    var playbackTime: Double { player?.currentTime ?? 0 }
+    var outputDescription: String {
+        let session = AVAudioSession.sharedInstance()
+        if session.outputVolume < 0.01 { return "设备媒体音量为 0，请调高音量。" }
+        return "正在试听 · " + session.currentRoute.outputs.map(\.portName).joined(separator: "、")
+    }
     func play(score: PianoScore, hands: PracticeHands, bpm: Double) throws {
         stop()
-        try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
-        try AVAudioSession.sharedInstance().setActive(true)
-        let rate = 22050.0, beatSeconds = 60 / bpm
-        // Bound synthesis memory on long exercises. Demonstrations use at most two bars.
-        let seconds = min(40, score.length * beatSeconds + 0.4)
-        var samples = [Double](repeating: 0, count: Int(seconds * rate))
-        for event in score.events {
-            let start = Int(event.beat * beatSeconds * rate)
-            guard start < samples.count else { break }
-            let duration = min(event.duration * beatSeconds * 0.9 + 0.1, seconds - Double(start) / rate)
-            for note in event.pitches(hands) {
-                let frequency = Music.frequency(note)
-                for i in 0..<Int(duration * rate) where start + i < samples.count {
-                    let t = Double(i) / rate
-                    let envelope = min(1, t / 0.008) * exp(-t * 3.5) * min(1, max(0, duration - t) / 0.04)
-                    let tone = sin(2 * .pi * frequency * t) + 0.25 * sin(4 * .pi * frequency * t) + 0.10 * sin(6 * .pi * frequency * t)
-                    samples[start + i] += tone * envelope * 0.16
-                }
-            }
-        }
-        var data = Data()
-        func word(_ value: UInt32, count: Int) {
-            for i in 0..<count { data.append(UInt8((value >> (8 * i)) & 0xff)) }
-        }
-        let bytes = UInt32(samples.count * 2)
-        data.append(contentsOf: Array("RIFF".utf8)); word(36 + bytes, count: 4)
-        data.append(contentsOf: Array("WAVEfmt ".utf8)); word(16, count: 4); word(1, count: 2); word(1, count: 2)
-        word(UInt32(rate), count: 4); word(UInt32(rate * 2), count: 4); word(2, count: 2); word(16, count: 2)
-        data.append(contentsOf: Array("data".utf8)); word(bytes, count: 4)
-        for value in samples {
-            let signed = Int16(max(-1, min(1, value)) * 30000)
-            word(UInt32(UInt16(bitPattern: signed)), count: 2)
-        }
-        player = try AVAudioPlayer(data: data)
-        player?.prepareToPlay(); player?.play()
+        let data = try PianoPreviewAudio.wav(score: score, hands: hands, bpm: bpm)
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.playback, mode: .default, options: [])
+        try session.setActive(true)
+        sessionToken = AudioSessionOwnership.shared.claim()
+        let audio = try AVAudioPlayer(data: data)
+        audio.volume = 1
+        guard audio.prepareToPlay(), audio.play() else { throw PianoPreviewError.playback }
+        player = audio
     }
     func stop() {
         player?.stop(); player = nil
-        speaker.stopSpeaking(at: .immediate)
+        if speaker.isSpeaking || speaker.isPaused { speaker.stopSpeaking(at: .immediate) }
+        if let token = sessionToken {
+            sessionToken = nil
+            if AudioSessionOwnership.shared.release(token) { try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation) }
+        }
     }
 }
